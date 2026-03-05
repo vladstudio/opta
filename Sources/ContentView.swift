@@ -32,7 +32,7 @@ struct ContentView: View {
         }
         .frame(minWidth: 480, maxWidth: 480, minHeight: 400)
         .onOpenURL { url in
-            if url.pathExtension.lowercased() == "png" {
+            if acceptedExtensions.contains(url.pathExtension.lowercased()) {
                 addFile(url)
             }
         }
@@ -64,7 +64,7 @@ struct ContentView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "doc.badge.plus")
                         .font(.largeTitle)
-                    Text("Drop PNG files here")
+                    Text("Drop image files here")
                 }
                 .foregroundStyle(.secondary)
                 .allowsHitTesting(false)
@@ -127,7 +127,7 @@ struct ContentView: View {
     private func addFiles() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
-        panel.allowedContentTypes = [.png]
+        panel.allowedContentTypes = acceptedImageTypes
         guard panel.runModal() == .OK else { return }
         for url in panel.urls { addFile(url) }
     }
@@ -143,7 +143,7 @@ struct ContentView: View {
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
                 guard let data = item as? Data,
                       let url = URL(dataRepresentation: data, relativeTo: nil),
-                      url.pathExtension.lowercased() == "png" else { return }
+                      acceptedExtensions.contains(url.pathExtension.lowercased()) else { return }
                 DispatchQueue.main.async { addFile(url) }
             }
         }
@@ -167,12 +167,11 @@ struct ContentView: View {
 // MARK: - File Row
 
 struct FileRowView: View {
-    static let pngIcon = NSWorkspace.shared.icon(for: .png)
     @ObservedObject var file: FileItem
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(nsImage: Self.pngIcon)
+            Image(nsImage: file.icon)
                 .resizable()
                 .frame(width: 20, height: 20)
             Text(file.filename)

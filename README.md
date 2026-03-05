@@ -2,13 +2,13 @@
 
 <img src="icon.png" width="128" alt="Opta icon">
 
-A simple macOS app to optimize PNG files. Reduce colors, strip metadata, convert to WebP.
+A simple macOS app to optimize images. Accepts PNG, JPEG, TIFF, GIF, BMP, HEIC, and WebP. Output as optimized PNG or WebP.
 
 ![Screenshot](opta-screenshot.png)
 
 ## Features
 
-- Drag & drop or select PNG files
+- Drag & drop or select image files (PNG, JPEG, TIFF, GIF, BMP, HEIC, WebP)
 - Reduce colors: All, 256, 128, 64, 32, 16, 4, 2
 - Output as optimized PNG or WebP
 - Strip metadata
@@ -35,7 +35,8 @@ opta
 
 ## How it works
 
-1. **Color reduction** (if not "All") — [pngquant](https://pngquant.org/)
+1. **Input conversion** (non-PNG only) — `sips` (built into macOS) converts to PNG
+2. **Color reduction** (if not "All") — [pngquant](https://pngquant.org/)
 2. **PNG optimization** — [oxipng](https://github.com/shssoichern/oxipng) (lossless, configurable level 0–6)
 3. **WebP conversion** — [cwebp](https://developers.google.com/speed/webp/docs/cwebp)
 4. Metadata stripping via tool flags

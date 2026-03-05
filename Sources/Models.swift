@@ -1,4 +1,9 @@
+import AppKit
 import Foundation
+import UniformTypeIdentifiers
+
+let acceptedImageTypes: [UTType] = [.png, .jpeg, .tiff, .gif, .bmp, .heic, .webP]
+let acceptedExtensions = Set(["png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp", "heic", "heif", "webp"])
 
 enum OutputFormat: String, CaseIterable {
     case png = "PNG"
@@ -15,11 +20,14 @@ class FileItem: Identifiable, ObservableObject {
     let originalSize: Int64
     @Published var status: FileStatus?
 
+    let icon: NSImage
     var filename: String { url.lastPathComponent }
+    var isPNG: Bool { url.pathExtension.lowercased() == "png" }
 
     init(url: URL) {
         self.url = url
         self.originalSize = (try? FileManager.default.attributesOfItem(atPath: url.path(percentEncoded: false))[.size] as? Int64) ?? 0
+        self.icon = NSWorkspace.shared.icon(forFile: url.path(percentEncoded: false))
     }
 }
 

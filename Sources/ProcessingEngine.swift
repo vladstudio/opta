@@ -110,6 +110,16 @@ class ProcessingEngine: ObservableObject {
 
         var current = input
 
+        // Step 0: Convert non-PNG to PNG via sips
+        let isPNG = url.pathExtension.lowercased() == "png"
+        let sipsTmp = isPNG ? nil : FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".png").path
+        if let sipsTmp {
+            try runDirect("/usr/bin/sips", ["-s", "format", "png", current, "--out", sipsTmp])
+            current = sipsTmp
+        }
+        defer { if let sipsTmp { try? FileManager.default.removeItem(atPath: sipsTmp) } }
+
         // Step 1: Quantize colors if needed
         if colors > 0 {
             var args = ["\(colors)", "--force"]
@@ -135,8 +145,7 @@ class ProcessingEngine: ObservableObject {
         return output
     }
 
-    private static func run(_ paths: [String: String], _ tool: String, _ args: [String]) throws {
-        guard let exe = paths[tool] else { throw OptaError.toolNotFound(tool) }
+    private static func runDirect(_ exe: String, _ args: [String]) throws {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: exe)
         p.arguments = args
@@ -149,7 +158,12 @@ class ProcessingEngine: ObservableObject {
         guard p.terminationStatus == 0 else {
             let msg = String(data: errData, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? "exit \(p.terminationStatus)"
-            throw OptaError.toolFailed(tool, msg)
+            throw OptaError.toolFailed(exe, msg)
         }
+    }
+
+    private static func run(_ paths: [String: String], _ tool: String, _ args: [String]) throws {
+        guard let exe = paths[tool] else { throw OptaError.toolNotFound(tool) }
+        try runDirect(exe, args)
     }
 }
