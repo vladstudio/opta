@@ -6,5 +6,7 @@ struct OptaApp: App {
         WindowGroup {
             ContentView()
         }
+        .defaultSize(width: 480, height: 400)
+        .windowResizability(.contentSize)
     }
 }
