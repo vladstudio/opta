@@ -52,7 +52,11 @@ curl -sL "$DOWNLOAD_URL" -o "$TMP_DIR/$APP_NAME.zip"
 
 info "Installing to $INSTALL_DIR..."
 unzip -q "$TMP_DIR/$APP_NAME.zip" -d "$TMP_DIR"
-cp "$TMP_DIR/$APP_NAME" "$INSTALL_DIR/$APP_NAME"
+if [[ -w "$INSTALL_DIR" ]]; then
+    cp "$TMP_DIR/$APP_NAME" "$INSTALL_DIR/$APP_NAME"
+else
+    sudo cp "$TMP_DIR/$APP_NAME" "$INSTALL_DIR/$APP_NAME"
+fi
 chmod +x "$INSTALL_DIR/$APP_NAME"
 
 echo ""

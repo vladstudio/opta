@@ -19,7 +19,7 @@ class FileItem: Identifiable, ObservableObject {
 
     init(url: URL) {
         self.url = url
-        self.originalSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+        self.originalSize = (try? FileManager.default.attributesOfItem(atPath: url.path(percentEncoded: false))[.size] as? Int64) ?? 0
     }
 }
 

@@ -97,8 +97,8 @@ class ProcessingEngine: ObservableObject {
         suffix: String, stripMetadata: Bool, colorIndex: Int, quality: Int,
         oxipngLevel: Int
     ) throws -> String {
-        let input = url.path
-        let dir = url.deletingLastPathComponent().path
+        let input = url.path(percentEncoded: false)
+        let dir = url.deletingLastPathComponent().path(percentEncoded: false)
         let base = url.deletingPathExtension().lastPathComponent
         let ext = format == .png ? "png" : "webp"
         let output = "\(dir)/\(base)\(suffix).\(ext)"
