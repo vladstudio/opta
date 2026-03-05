@@ -31,6 +31,11 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 480, maxWidth: 480, minHeight: 400)
+        .onOpenURL { url in
+            if url.pathExtension.lowercased() == "png" {
+                addFile(url)
+            }
+        }
         .alert("Error", isPresented: $showAlert) {
             Button("OK") {}
         } message: {
