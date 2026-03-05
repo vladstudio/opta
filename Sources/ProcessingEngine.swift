@@ -13,14 +13,19 @@ enum OptaError: LocalizedError {
 }
 
 class ProcessingEngine: ObservableObject {
-    @Published var isProcessing = false
-    private var _cancelled = false
-    private let cancelLock = NSLock()
     private var toolPaths: [String: String] = [:]
+    private var queue: [Job] = []
+    private let queueLock = NSLock()
+    private var loopRunning = false
 
-    private var cancelled: Bool {
-        get { cancelLock.lock(); defer { cancelLock.unlock() }; return _cancelled }
-        set { cancelLock.lock(); defer { cancelLock.unlock() }; _cancelled = newValue }
+    private struct Job {
+        let file: FileItem
+        let format: OutputFormat
+        let suffix: String
+        let stripMetadata: Bool
+        let colorIndex: Int
+        let quality: Int
+        let oxipngLevel: Int
     }
 
     func checkTools() -> String? {
@@ -46,49 +51,59 @@ class ProcessingEngine: ObservableObject {
         return nil
     }
 
-    func start(files: [FileItem], format: OutputFormat, suffix: String,
-               stripMetadata: Bool, colorIndex: Int, quality: Int, oxipngLevel: Int) {
-        isProcessing = true
-        cancelled = false
-        for file in files { file.status = .waiting }
+    func enqueue(files: [FileItem], format: OutputFormat, suffix: String,
+                 stripMetadata: Bool, colorIndex: Int, quality: Int, oxipngLevel: Int) {
+        let pending = files.filter { $0.status == nil }
+        guard !pending.isEmpty else { return }
 
-        let paths = toolPaths
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            for file in files {
-                if self?.cancelled == true { break }
+        for file in pending { file.status = .waiting }
 
-                DispatchQueue.main.async { file.status = .working }
+        let jobs = pending.map { Job(file: $0, format: format, suffix: suffix,
+                                     stripMetadata: stripMetadata, colorIndex: colorIndex,
+                                     quality: quality, oxipngLevel: oxipngLevel) }
 
-                do {
-                    let outputPath = try Self.processFile(
-                        paths: paths, url: file.url, format: format,
-                        suffix: suffix, stripMetadata: stripMetadata,
-                        colorIndex: colorIndex, quality: quality,
-                        oxipngLevel: oxipngLevel
-                    )
-                    let beforeKB = file.originalSize / 1024
-                    let afterSize = (try? FileManager.default.attributesOfItem(atPath: outputPath)[.size] as? Int64) ?? 0
-                    let afterKB = afterSize / 1024
-                    DispatchQueue.main.async { file.status = .done(beforeKB: beforeKB, afterKB: afterKB) }
-                } catch {
-                    let msg = error.localizedDescription
-                    DispatchQueue.main.async { file.status = .error(msg) }
-                }
-            }
+        queueLock.lock()
+        queue.append(contentsOf: jobs)
+        let shouldStart = !loopRunning
+        if shouldStart { loopRunning = true }
+        queueLock.unlock()
 
-            let wasCancelled = self?.cancelled == true
-            DispatchQueue.main.async {
-                self?.isProcessing = false
-                if wasCancelled {
-                    for file in files {
-                        if case .waiting = file.status { file.status = nil }
-                    }
-                }
+        if shouldStart {
+            let paths = toolPaths
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.processLoop(paths: paths)
             }
         }
     }
 
-    func cancel() { cancelled = true }
+    private func processLoop(paths: [String: String]) {
+        while true {
+            queueLock.lock()
+            let job = queue.isEmpty ? nil : queue.removeFirst()
+            if job == nil { loopRunning = false }
+            queueLock.unlock()
+
+            guard let job else { break }
+
+            DispatchQueue.main.async { job.file.status = .working }
+
+            do {
+                let outputPath = try Self.processFile(
+                    paths: paths, url: job.file.url, format: job.format,
+                    suffix: job.suffix, stripMetadata: job.stripMetadata,
+                    colorIndex: job.colorIndex, quality: job.quality,
+                    oxipngLevel: job.oxipngLevel
+                )
+                let beforeKB = job.file.originalSize / 1024
+                let afterSize = (try? FileManager.default.attributesOfItem(atPath: outputPath)[.size] as? Int64) ?? 0
+                let afterKB = afterSize / 1024
+                DispatchQueue.main.async { job.file.status = .done(beforeKB: beforeKB, afterKB: afterKB) }
+            } catch {
+                let msg = error.localizedDescription
+                DispatchQueue.main.async { job.file.status = .error(msg) }
+            }
+        }
+    }
 
     // MARK: - Processing
 

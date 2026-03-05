@@ -18,22 +18,13 @@ struct ContentView: View {
         VStack(spacing: 0) {
             fileList
             Divider()
-            if engine.isProcessing {
-                HStack {
-                    Spacer()
-                    Button("Cancel") { engine.cancel() }
-                        .keyboardShortcut(.cancelAction)
-                    Spacer()
-                }
-                .padding()
-            } else {
-                controls
-            }
+            controls
         }
         .frame(minWidth: 480, maxWidth: 480, minHeight: 400)
         .onOpenURL { url in
             if acceptedExtensions.contains(url.pathExtension.lowercased()) {
                 addFile(url)
+                processNewFiles()
             }
         }
         .alert("Error", isPresented: $showAlert) {
@@ -46,7 +37,6 @@ struct ContentView: View {
     // MARK: - File List
 
     private func removeSelected() {
-        guard !engine.isProcessing else { return }
         files.removeAll { selection.contains($0.id) }
         selection.removeAll()
     }
@@ -60,7 +50,7 @@ struct ContentView: View {
         .onDeleteCommand { removeSelected() }
         .onDrop(of: [.fileURL], isTargeted: nil, perform: handleDrop)
         .overlay {
-            if files.isEmpty && !engine.isProcessing {
+            if files.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "doc.badge.plus")
                         .font(.largeTitle)
@@ -111,13 +101,6 @@ struct ContentView: View {
                 }
             }
 
-            HStack {
-                Spacer()
-                Button("Optimize") { optimize() }
-                    .disabled(files.isEmpty)
-                    .keyboardShortcut(.defaultAction)
-                Spacer()
-            }
         }
         .padding()
     }
@@ -130,6 +113,7 @@ struct ContentView: View {
         panel.allowedContentTypes = acceptedImageTypes
         guard panel.runModal() == .OK else { return }
         for url in panel.urls { addFile(url) }
+        processNewFiles()
     }
 
     private func addFile(_ url: URL) {
@@ -138,30 +122,34 @@ struct ContentView: View {
         files.append(FileItem(url: normalized))
     }
 
+    private func processNewFiles() {
+        if let msg = engine.checkTools() {
+            alertMessage = msg
+            showAlert = true
+            return
+        }
+        engine.enqueue(
+            files: files, format: format, suffix: suffix,
+            stripMetadata: stripMetadata, colorIndex: Int(colorIndex),
+            quality: Int(quality), oxipngLevel: Int(oxipngLevel)
+        )
+    }
+
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         for provider in providers {
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
                 guard let data = item as? Data,
                       let url = URL(dataRepresentation: data, relativeTo: nil),
                       acceptedExtensions.contains(url.pathExtension.lowercased()) else { return }
-                DispatchQueue.main.async { addFile(url) }
+                DispatchQueue.main.async {
+                    self.addFile(url)
+                    self.processNewFiles()
+                }
             }
         }
         return true
     }
 
-    private func optimize() {
-        if let msg = engine.checkTools() {
-            alertMessage = msg
-            showAlert = true
-            return
-        }
-        engine.start(
-            files: files, format: format, suffix: suffix,
-            stripMetadata: stripMetadata, colorIndex: Int(colorIndex),
-            quality: Int(quality), oxipngLevel: Int(oxipngLevel)
-        )
-    }
 }
 
 // MARK: - File Row
