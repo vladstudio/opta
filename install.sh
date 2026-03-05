@@ -2,15 +2,17 @@
 set -e
 
 REPO="vladstudio/opta"
-APP_NAME="opta"
-INSTALL_DIR="/usr/local/bin"
+APP_NAME="Opta"
+INSTALL_DIR="/Applications"
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
 info() { echo -e "${GREEN}==>${NC} $1"; }
+warn() { echo -e "${YELLOW}==>${NC} $1"; }
 error() { echo -e "${RED}Error:${NC} $1"; exit 1; }
 
 # Check macOS
@@ -52,12 +54,24 @@ curl -sL "$DOWNLOAD_URL" -o "$TMP_DIR/$APP_NAME.zip"
 
 info "Installing to $INSTALL_DIR..."
 unzip -q "$TMP_DIR/$APP_NAME.zip" -d "$TMP_DIR"
-if [[ -w "$INSTALL_DIR" ]]; then
-    cp "$TMP_DIR/$APP_NAME" "$INSTALL_DIR/$APP_NAME"
-else
-    sudo cp "$TMP_DIR/$APP_NAME" "$INSTALL_DIR/$APP_NAME"
-fi
-chmod +x "$INSTALL_DIR/$APP_NAME"
+
+# Quit running app and remove old version
+pkill -x "$APP_NAME" 2>/dev/null || true
+sleep 0.5
+[[ -d "$INSTALL_DIR/$APP_NAME.app" ]] && rm -rf "$INSTALL_DIR/$APP_NAME.app"
+
+mv "$TMP_DIR/$APP_NAME.app" "$INSTALL_DIR/"
+
+# Remove quarantine (allows unsigned app to run)
+xattr -dr com.apple.quarantine "$INSTALL_DIR/$APP_NAME.app" 2>/dev/null || true
+
+info "Installed $APP_NAME.app"
 
 echo ""
-info "$APP_NAME installed! Run with: opta"
+warn "Opening $APP_NAME..."
+echo ""
+echo "  If prompted about an unidentified developer:"
+echo "  → Click 'Open' to proceed"
+echo ""
+
+open "$INSTALL_DIR/$APP_NAME.app"
