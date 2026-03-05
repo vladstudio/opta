@@ -7,7 +7,16 @@ let acceptedExtensions = Set(["png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp",
 
 enum OutputFormat: String, CaseIterable {
     case png = "PNG"
+    case jpg = "JPG"
     case webp = "WebP"
+
+    var ext: String {
+        switch self {
+        case .png: return "png"
+        case .jpg: return "jpg"
+        case .webp: return "webp"
+        }
+    }
 }
 
 enum FileStatus {

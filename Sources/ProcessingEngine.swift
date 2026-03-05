@@ -100,8 +100,7 @@ class ProcessingEngine: ObservableObject {
         let input = url.path(percentEncoded: false)
         let dir = url.deletingLastPathComponent().path(percentEncoded: false)
         let base = url.deletingPathExtension().lastPathComponent
-        let ext = format == .png ? "png" : "webp"
-        let output = "\(dir)/\(base)\(suffix).\(ext)"
+        let output = "\(dir)/\(base)\(suffix).\(format.ext)"
         let colors = colorSteps.indices.contains(colorIndex) ? colorSteps[colorIndex] : 0
 
         let tmp = FileManager.default.temporaryDirectory
@@ -136,6 +135,10 @@ class ProcessingEngine: ObservableObject {
             if stripMetadata { args += ["--strip", "all"] }
             args += ["-o", "\(oxipngLevel)", "--out", output, current]
             try run(paths, "oxipng", args)
+        case .jpg:
+            var args = ["-s", "format", "jpeg", "-s", "formatOptions", "\(quality)"]
+            args += [current, "--out", output]
+            try runDirect("/usr/bin/sips", args)
         case .webp:
             var args: [String] = []
             if stripMetadata { args += ["-metadata", "none"] }
