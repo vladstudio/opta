@@ -144,10 +144,10 @@ class ProcessingEngine: ObservableObject {
         p.standardError = errPipe
         p.standardOutput = FileHandle.nullDevice
         try p.run()
+        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
         guard p.terminationStatus == 0 else {
-            let data = errPipe.fileHandleForReading.readDataToEndOfFile()
-            let msg = String(data: data, encoding: .utf8)?
+            let msg = String(data: errData, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? "exit \(p.terminationStatus)"
             throw OptaError.toolFailed(tool, msg)
         }
