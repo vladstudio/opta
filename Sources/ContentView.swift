@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var quality = 80.0
     @State private var oxipngLevel = 6.0
     @State private var selection: Set<FileItem.ID> = []
+    @EnvironmentObject private var appState: AppState
     @State private var showAlert = false
     @State private var alertMessage = ""
 
@@ -31,10 +32,14 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 480, maxWidth: 480, minHeight: 400)
-        .onOpenURL { url in
-            if acceptedExtensions.contains(url.pathExtension.lowercased()) {
-                addFile(url)
+        .onChange(of: appState.pendingURLs) { newValue in
+            guard !newValue.isEmpty else { return }
+            for url in newValue {
+                if acceptedExtensions.contains(url.pathExtension.lowercased()) {
+                    addFile(url)
+                }
             }
+            appState.pendingURLs.removeAll()
         }
         .alert("Error", isPresented: $showAlert) {
             Button("OK") {}
