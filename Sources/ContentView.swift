@@ -22,7 +22,7 @@ struct ContentView: View {
     @State private var videoSuffix = ""
     @State private var videoStripMetadata = true
     @State private var videoDimension: DimensionPreset = .original
-    @State private var videoCRF = 20.0
+    @State private var videoCRF = 30.0
 
     // Audio controls
     @State private var audioFormat: AudioOutputFormat = .mp3
@@ -107,10 +107,29 @@ struct ContentView: View {
 
     // MARK: - Tab Bar
 
+    private func hasUnprocessedFiles(for tab: MediaTab) -> Bool {
+        let files: [FileItem]
+        switch tab {
+        case .images: files = imageFiles
+        case .video: files = videoFiles
+        case .audio: files = audioFiles
+        }
+        return files.contains { item in
+            switch item.status {
+            case .none: return true
+            default: return false
+            }
+        }
+    }
+
+    private func tabLabel(for tab: MediaTab) -> String {
+        hasUnprocessedFiles(for: tab) ? "\(tab.rawValue) \u{25CF}" : tab.rawValue
+    }
+
     private var tabBar: some View {
         Picker("", selection: $selectedTab) {
             ForEach(MediaTab.allCases, id: \.self) { tab in
-                Text(tab.rawValue).tag(tab)
+                Text(tabLabel(for: tab)).tag(tab)
             }
         }
         .pickerStyle(.segmented)

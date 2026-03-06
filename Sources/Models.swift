@@ -61,7 +61,7 @@ enum VideoOutputFormat: String, CaseIterable {
 
     var crfDefault: Double {
         switch self {
-        case .mp4H264, .mov: return 20
+        case .mp4H264, .mov: return 30
         case .mp4H265: return 24
         case .webmVP9: return 25
         case .gif: return 0
