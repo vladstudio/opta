@@ -64,8 +64,14 @@ struct ContentView: View {
         .frame(minWidth: 480, maxWidth: 480, minHeight: 450)
         .onChange(of: appState.pendingURLs) { newValue in
             guard !newValue.isEmpty else { return }
+            let wasEmpty = imageFiles.isEmpty && videoFiles.isEmpty && audioFiles.isEmpty
             for url in newValue { addFile(url) }
             appState.pendingURLs.removeAll()
+            if wasEmpty {
+                if !imageFiles.isEmpty { selectedTab = .images }
+                else if !videoFiles.isEmpty { selectedTab = .video }
+                else if !audioFiles.isEmpty { selectedTab = .audio }
+            }
         }
         .onChange(of: videoFormat) { newFormat in
             videoCRF = newFormat.crfDefault
