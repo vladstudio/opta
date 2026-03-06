@@ -19,7 +19,7 @@ struct OptaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        WindowGroup {
+        Window("Opta", id: "main") {
             ContentView()
                 .environmentObject(appDelegate.appState)
         }

@@ -9,7 +9,7 @@ struct ContentView: View {
     @State private var stripMetadata = true
     @State private var colorIndex = 0.0
     @State private var quality = 80.0
-    @State private var oxipngLevel = 6.0
+
     @State private var selection: Set<FileItem.ID> = []
     @EnvironmentObject private var appState: AppState
     @State private var showAlert = false
@@ -104,12 +104,7 @@ struct ContentView: View {
                 Slider(value: $colorIndex, in: 0...Double(colorSteps.count - 1), step: 1)
             }
 
-            if format == .png {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Optimization: \(Int(oxipngLevel))")
-                    Slider(value: $oxipngLevel, in: 0...6, step: 1)
-                }
-            } else {
+            if format != .png {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Quality: \(Int(quality))")
                     Slider(value: $quality, in: 0...100, step: 1)
@@ -164,7 +159,7 @@ struct ContentView: View {
         engine.start(
             files: files, format: format, suffix: suffix,
             stripMetadata: stripMetadata, colorIndex: Int(colorIndex),
-            quality: Int(quality), oxipngLevel: Int(oxipngLevel)
+            quality: Int(quality), oxipngLevel: 6
         )
     }
 }
