@@ -52,7 +52,7 @@ enum VideoOutputFormat: String, CaseIterable {
 
     var crfRange: ClosedRange<Double> {
         switch self {
-        case .mp4H264, .mov: return 15...30
+        case .mp4H264, .mov: return 16...36
         case .mp4H265: return 18...34
         case .webmVP9: return 12...45
         case .gif: return 0...0
