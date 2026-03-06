@@ -107,7 +107,7 @@ struct ContentView: View {
             if format != .png {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Quality: \(Int(quality))")
-                    Slider(value: $quality, in: 0...100, step: 1)
+                    Slider(value: $quality, in: 20...100, step: 2)
                 }
             }
 
