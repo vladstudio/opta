@@ -89,6 +89,20 @@ struct ContentView: View {
         } message: {
             Text(alertMessage)
         }
+        .background {
+            Group {
+                Button("") { selectedTab = .images }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("") { selectedTab = .video }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("") { selectedTab = .audio }
+                    .keyboardShortcut("3", modifiers: .command)
+                Button("") { if !engine.isProcessing { addFiles() } }
+                    .keyboardShortcut(.space, modifiers: [])
+            }
+            .frame(width: 0, height: 0)
+            .opacity(0)
+        }
     }
 
     // MARK: - Tab Bar
@@ -123,6 +137,9 @@ struct ContentView: View {
         List(selection: $selection) {
             ForEach(currentFiles) { file in
                 FileRowView(file: file)
+                    .onTapGesture(count: 2) {
+                        NSWorkspace.shared.activateFileViewerSelecting([file.url])
+                    }
             }
         }
         .onDeleteCommand { removeSelected() }
