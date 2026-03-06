@@ -88,34 +88,16 @@ struct ContentView: View {
     // MARK: - Tab Bar
 
     private var tabBar: some View {
-        HStack(spacing: 0) {
+        Picker("", selection: $selectedTab) {
             ForEach(MediaTab.allCases, id: \.self) { tab in
-                let count: Int = {
-                    switch tab {
-                    case .images: return imageFiles.count
-                    case .video: return videoFiles.count
-                    case .audio: return audioFiles.count
-                    }
-                }()
-
-                Button {
-                    if !engine.isProcessing { selectedTab = tab; selection.removeAll() }
-                } label: {
-                    Text("\(tab.rawValue) (\(count))")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                if tab != MediaTab.allCases.last {
-                    Divider().frame(height: 24)
-                }
+                Text(tab.rawValue).tag(tab)
             }
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 2)
+        .pickerStyle(.segmented)
+        .disabled(engine.isProcessing)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .onChange(of: selectedTab) { _ in selection.removeAll() }
     }
 
     // MARK: - File List

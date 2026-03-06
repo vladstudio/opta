@@ -97,6 +97,7 @@ let acceptedAudioTypes: [UTType] = acceptedAudioExtensions.compactMap { UTType(f
 enum AudioOutputFormat: String, CaseIterable {
     case mp3 = "MP3"
     case aac = "AAC"
+    case m4a = "M4A"
     case oggVorbis = "OGG Vorbis"
     case opus = "Opus"
     case flac = "FLAC"
@@ -105,7 +106,7 @@ enum AudioOutputFormat: String, CaseIterable {
     var ext: String {
         switch self {
         case .mp3: return "mp3"
-        case .aac: return "m4a"
+        case .aac, .m4a: return "m4a"
         case .oggVorbis: return "ogg"
         case .opus: return "opus"
         case .flac: return "flac"
@@ -120,7 +121,7 @@ enum AudioOutputFormat: String, CaseIterable {
     var bitrateSteps: [Int] {
         switch self {
         case .mp3: return [128, 160, 192, 224, 256, 320]
-        case .aac: return [128, 160, 192, 256, 320]
+        case .aac, .m4a: return [128, 160, 192, 256, 320]
         case .oggVorbis: return [128, 192, 256, 320, 500]
         case .opus: return [96, 128, 192, 256, 320]
         case .flac, .wav: return []
@@ -130,7 +131,7 @@ enum AudioOutputFormat: String, CaseIterable {
     var bitrateDefault: Int {
         switch self {
         case .mp3: return 320
-        case .aac: return 256
+        case .aac, .m4a: return 256
         case .oggVorbis: return 320
         case .opus: return 256
         case .flac, .wav: return 0

@@ -298,7 +298,7 @@ class ProcessingEngine: ObservableObject {
         switch format {
         case .mp3:
             args += ["-c:a", "libmp3lame", "-b:a", "\(bitrate)k"]
-        case .aac:
+        case .aac, .m4a:
             args += ["-c:a", "aac", "-b:a", "\(bitrate)k"]
         case .oggVorbis:
             args += ["-c:a", "libvorbis", "-b:a", "\(bitrate)k"]
