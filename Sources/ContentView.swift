@@ -123,7 +123,7 @@ struct ContentView: View {
     }
 
     private func tabLabel(for tab: MediaTab) -> String {
-        hasUnprocessedFiles(for: tab) ? "\(tab.rawValue) \u{25CF}" : tab.rawValue
+        hasUnprocessedFiles(for: tab) ? "\(tab.rawValue) \u{2022}" : tab.rawValue
     }
 
     private var tabBar: some View {
