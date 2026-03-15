@@ -397,11 +397,18 @@ struct ContentView: View {
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        var switchedTab = false
         for provider in providers {
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
                 guard let data = item as? Data,
                       let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                DispatchQueue.main.async { addFile(url) }
+                DispatchQueue.main.async {
+                    if !switchedTab, let tab = classifyFile(url.standardizedFileURL) {
+                        selectedTab = tab
+                        switchedTab = true
+                    }
+                    addFile(url)
+                }
             }
         }
         return true
