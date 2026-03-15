@@ -18,6 +18,7 @@ cp Info.plist "$APP/Contents/"
 cp .build/release/opta "$APP/Contents/MacOS/"
 cp -r .build/release/opta_opta.bundle "$APP/Contents/Resources/"
 cp AppIcon.icns "$APP/Contents/Resources/"
+codesign --force --deep --sign - "$APP"
 
 git add Info.plist
 git commit -m "v$VERSION"

@@ -203,17 +203,14 @@ class ProcessingEngine: ObservableObject {
     // MARK: - Notification
 
     private func sendCompletionNotification(fileCount: Int) {
-        let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            guard granted else { return }
-            let content = UNMutableNotificationContent()
-            content.title = "Optimization Complete"
-            content.body = fileCount == 1
-                ? "1 file has been optimized."
-                : "\(fileCount) files have been optimized."
-            content.sound = .default
-            center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
-        }
+        let content = UNMutableNotificationContent()
+        content.title = "Optimization Complete"
+        content.body = fileCount == 1
+            ? "1 file has been optimized."
+            : "\(fileCount) files have been optimized."
+        content.sound = .default
+        UNUserNotificationCenter.current()
+            .add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
     // MARK: - Image Pipeline
