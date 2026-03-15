@@ -169,7 +169,7 @@ struct ContentView: View {
                     switch selectedTab {
                     case .images: return "Drop image files here"
                     case .video: return "Drop video files here"
-                    case .audio: return "Drop audio files here"
+                    case .audio: return "Drop audio/video files here"
                     }
                 }()
                 VStack(spacing: 8) {
@@ -365,7 +365,7 @@ struct ContentView: View {
         case .video:
             panel.allowedContentTypes = acceptedVideoTypes
         case .audio:
-            panel.allowedContentTypes = acceptedAudioTypes
+            panel.allowedContentTypes = acceptedAudioTypes + acceptedVideoTypes
         }
 
         guard panel.runModal() == .OK else { return }
@@ -376,7 +376,10 @@ struct ContentView: View {
         let normalized = url.standardizedFileURL
         guard let tab = classifyFile(normalized) else { return }
 
-        switch tab {
+        // Video files on the audio tab → add as audio source
+        let targetTab = (tab == .video && selectedTab == .audio) ? .audio : tab
+
+        switch targetTab {
         case .images:
             guard !imageFiles.contains(where: { $0.url.standardizedFileURL == normalized }) else { return }
             imageFiles.append(FileItem(url: normalized))
@@ -385,7 +388,11 @@ struct ContentView: View {
             videoFiles.append(FileItem(url: normalized))
         case .audio:
             guard !audioFiles.contains(where: { $0.url.standardizedFileURL == normalized }) else { return }
-            audioFiles.append(FileItem(url: normalized))
+            let item = FileItem(url: normalized)
+            audioFiles.append(item)
+            if item.isVideoSource {
+                engine.probeAudioTracks(file: item)
+            }
         }
     }
 
@@ -445,6 +452,15 @@ struct FileRowView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer()
+            if file.audioTracks.count > 1 {
+                Picker("", selection: $file.selectedAudioTrack) {
+                    ForEach(file.audioTracks) { track in
+                        Text(track.label).tag(track.id)
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
             statusLabel
         }
     }

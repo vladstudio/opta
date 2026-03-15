@@ -12,6 +12,7 @@ cp .build/release/opta "$APP/Contents/MacOS/"
 cp -r .build/release/opta_opta.bundle "$APP/Contents/Resources/"
 cp AppIcon.icns "$APP/Contents/Resources/"
 
+pkill -x Opta 2>/dev/null || true
 rm -rf /Applications/Opta.app
 mv "$APP" /Applications/
 touch /Applications/Opta.app

@@ -92,10 +92,68 @@ class ProcessingEngine: ObservableObject {
     func startAudio(files: [FileItem], format: AudioOutputFormat, suffix: String,
                     stripMetadata: Bool, bitrate: Int) {
         runBatch(files: files) { paths, file in
-            try Self.processAudio(
+            let trackIndex = file.audioTracks.count > 1 ? file.selectedAudioTrack : nil
+            return try Self.processAudio(
                 paths: paths, url: file.url, format: format,
-                suffix: suffix, stripMetadata: stripMetadata, bitrate: bitrate
+                suffix: suffix, stripMetadata: stripMetadata, bitrate: bitrate,
+                audioStreamIndex: trackIndex
             )
+        }
+    }
+
+    // MARK: - Audio Track Probing
+
+    func probeAudioTracks(file: FileItem) {
+        let paths = toolPaths
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let ffprobe = paths["ffprobe"] ?? self.findToolSync("ffprobe") else { return }
+            let tracks = Self.parseAudioTracks(ffprobe: ffprobe, url: file.url)
+            DispatchQueue.main.async {
+                file.audioTracks = tracks
+            }
+        }
+    }
+
+    func findToolSync(_ name: String) -> String? {
+        if let cached = toolPaths[name] { return cached }
+        if let path = findTool(name) {
+            toolPaths[name] = path
+            return path
+        }
+        return nil
+    }
+
+    private static func parseAudioTracks(ffprobe: String, url: URL) -> [AudioTrack] {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: ffprobe)
+        p.arguments = ["-v", "quiet", "-print_format", "json", "-show_streams", "-select_streams", "a",
+                       url.path(percentEncoded: false)]
+        let outPipe = Pipe()
+        p.standardOutput = outPipe
+        p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { return [] }
+        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else { return [] }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let streams = json["streams"] as? [[String: Any]] else { return [] }
+
+        return streams.enumerated().map { index, stream in
+            var parts: [String] = []
+            if let codec = stream["codec_name"] as? String { parts.append(codec.uppercased()) }
+            if let tags = stream["tags"] as? [String: String], let lang = tags["language"] { parts.append(lang) }
+            if let channels = stream["channels"] as? Int {
+                switch channels {
+                case 1: parts.append("mono")
+                case 2: parts.append("stereo")
+                case 6: parts.append("5.1")
+                case 8: parts.append("7.1")
+                default: parts.append("\(channels)ch")
+                }
+            }
+            let label = "Track \(index + 1)" + (parts.isEmpty ? "" : " — \(parts.joined(separator: ", "))")
+            return AudioTrack(id: index, label: label)
         }
     }
 
@@ -145,10 +203,10 @@ class ProcessingEngine: ObservableObject {
         oxipngLevel: Int
     ) throws -> String {
         let input = url.path(percentEncoded: false)
-        let (finalOutput, sameFile) = outputPath(for: url, suffix: suffix, ext: format.ext)
-        let output = sameFile
-            ? FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".\(format.ext)").path
-            : finalOutput
+        let finalOutput = outputPath(for: url, suffix: suffix, ext: format.ext)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".\(format.ext)").path
+        defer { try? FileManager.default.removeItem(atPath: output) }
         let colors = colorSteps.indices.contains(colorIndex) ? colorSteps[colorIndex] : 0
 
         let tmp = FileManager.default.temporaryDirectory
@@ -194,10 +252,8 @@ class ProcessingEngine: ObservableObject {
             try run(paths, "cwebp", args)
         }
 
-        if sameFile {
-            try? FileManager.default.removeItem(atPath: finalOutput)
-            try FileManager.default.moveItem(atPath: output, toPath: finalOutput)
-        }
+        try? FileManager.default.removeItem(atPath: finalOutput)
+        try FileManager.default.moveItem(atPath: output, toPath: finalOutput)
         return finalOutput
     }
 
@@ -208,10 +264,10 @@ class ProcessingEngine: ObservableObject {
         suffix: String, stripMetadata: Bool, dimension: DimensionPreset, crf: Int
     ) throws -> String {
         let input = url.path(percentEncoded: false)
-        let (finalOutput, sameFile) = outputPath(for: url, suffix: suffix, ext: format.ext)
-        let output = sameFile
-            ? FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".\(format.ext)").path
-            : finalOutput
+        let finalOutput = outputPath(for: url, suffix: suffix, ext: format.ext)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".\(format.ext)").path
+        defer { try? FileManager.default.removeItem(atPath: output) }
         guard let ffmpeg = paths["ffmpeg"] else { throw OptaError.toolNotFound("ffmpeg") }
 
         var filters: [String] = []
@@ -273,10 +329,8 @@ class ProcessingEngine: ObservableObject {
             try runDirect(ffmpeg, args)
         }
 
-        if sameFile {
-            try? FileManager.default.removeItem(atPath: finalOutput)
-            try FileManager.default.moveItem(atPath: output, toPath: finalOutput)
-        }
+        try? FileManager.default.removeItem(atPath: finalOutput)
+        try FileManager.default.moveItem(atPath: output, toPath: finalOutput)
         return finalOutput
     }
 
@@ -284,16 +338,20 @@ class ProcessingEngine: ObservableObject {
 
     private static func processAudio(
         paths: [String: String], url: URL, format: AudioOutputFormat,
-        suffix: String, stripMetadata: Bool, bitrate: Int
+        suffix: String, stripMetadata: Bool, bitrate: Int,
+        audioStreamIndex: Int? = nil
     ) throws -> String {
         let input = url.path(percentEncoded: false)
-        let (finalOutput, sameFile) = outputPath(for: url, suffix: suffix, ext: format.ext)
-        let output = sameFile
-            ? FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".\(format.ext)").path
-            : finalOutput
+        let finalOutput = outputPath(for: url, suffix: suffix, ext: format.ext)
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".\(format.ext)").path
+        defer { try? FileManager.default.removeItem(atPath: output) }
         guard let ffmpeg = paths["ffmpeg"] else { throw OptaError.toolNotFound("ffmpeg") }
 
         var args = ["-i", input]
+        if let idx = audioStreamIndex {
+            args += ["-map", "0:a:\(idx)"]
+        }
 
         switch format {
         case .mp3:
@@ -315,21 +373,17 @@ class ProcessingEngine: ObservableObject {
 
         try runDirect(ffmpeg, args)
 
-        if sameFile {
-            try? FileManager.default.removeItem(atPath: finalOutput)
-            try FileManager.default.moveItem(atPath: output, toPath: finalOutput)
-        }
+        try? FileManager.default.removeItem(atPath: finalOutput)
+        try FileManager.default.moveItem(atPath: output, toPath: finalOutput)
         return finalOutput
     }
 
     // MARK: - Output Path
 
-    private static func outputPath(for url: URL, suffix: String, ext: String) -> (path: String, isSameAsInput: Bool) {
+    private static func outputPath(for url: URL, suffix: String, ext: String) -> String {
         let dir = url.deletingLastPathComponent().path(percentEncoded: false)
         let base = url.deletingPathExtension().lastPathComponent
-        let output = "\(dir)/\(base)\(suffix).\(ext)"
-        let input = url.path(percentEncoded: false)
-        return (output, output == input)
+        return "\(dir)/\(base)\(suffix).\(ext)"
     }
 
     // MARK: - Shell Execution

@@ -139,6 +139,13 @@ enum AudioOutputFormat: String, CaseIterable {
     }
 }
 
+// MARK: - Audio Track Info
+
+struct AudioTrack: Identifiable {
+    let id: Int // stream index within audio streams (0-based)
+    let label: String
+}
+
 // MARK: - Shared
 
 func classifyFile(_ url: URL) -> MediaTab? {
@@ -160,9 +167,15 @@ class FileItem: Identifiable, ObservableObject {
     let url: URL
     let originalSize: Int64
     @Published var status: FileStatus?
+    @Published var audioTracks: [AudioTrack] = []
+    @Published var selectedAudioTrack: Int = 0
 
     let icon: NSImage
     var filename: String { url.lastPathComponent }
+
+    var isVideoSource: Bool {
+        acceptedVideoExtensions.contains(url.pathExtension.lowercased())
+    }
 
     init(url: URL) {
         self.url = url
