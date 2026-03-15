@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 enum OptaError: LocalizedError {
     case toolNotFound(String)
@@ -165,6 +166,7 @@ class ProcessingEngine: ObservableObject {
         for file in files { file.status = .waiting }
 
         let paths = toolPaths
+        let startTime = Date()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             for file in files {
                 if self?.cancelled == true { break }
@@ -184,14 +186,33 @@ class ProcessingEngine: ObservableObject {
             }
 
             let wasCancelled = self?.cancelled == true
+            let elapsed = Date().timeIntervalSince(startTime)
             DispatchQueue.main.async {
                 self?.isProcessing = false
                 if wasCancelled {
                     for file in files {
                         if case .waiting = file.status { file.status = nil }
                     }
+                } else if elapsed > 10 {
+                    self?.sendCompletionNotification(fileCount: files.count)
                 }
             }
+        }
+    }
+
+    // MARK: - Notification
+
+    private func sendCompletionNotification(fileCount: Int) {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "Optimization Complete"
+            content.body = fileCount == 1
+                ? "1 file has been optimized."
+                : "\(fileCount) files have been optimized."
+            content.sound = .default
+            center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
         }
     }
 
