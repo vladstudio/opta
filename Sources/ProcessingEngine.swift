@@ -204,10 +204,10 @@ class ProcessingEngine: ObservableObject {
 
     private func sendCompletionNotification(fileCount: Int) {
         let content = UNMutableNotificationContent()
-        content.title = "Optimization Complete"
+        content.title = "Opta"
         content.body = fileCount == 1
-            ? "1 file has been optimized."
-            : "\(fileCount) files have been optimized."
+            ? "1 file optimized."
+            : "\(fileCount) files optimized."
         content.sound = .default
         UNUserNotificationCenter.current()
             .add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
