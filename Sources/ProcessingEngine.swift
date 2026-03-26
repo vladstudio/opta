@@ -16,12 +16,13 @@ enum OptaError: LocalizedError {
 class ProcessingEngine: ObservableObject {
     @Published var isProcessing = false
     private var _cancelled = false
-    private let cancelLock = NSLock()
+    private var _currentProcess: Process?
+    private let lock = NSLock()
     private var toolPaths: [String: String] = [:]
 
     private var cancelled: Bool {
-        get { cancelLock.lock(); defer { cancelLock.unlock() }; return _cancelled }
-        set { cancelLock.lock(); defer { cancelLock.unlock() }; _cancelled = newValue }
+        get { lock.lock(); defer { lock.unlock() }; return _cancelled }
+        set { lock.lock(); defer { lock.unlock() }; _cancelled = newValue }
     }
 
     // MARK: - Tool Discovery
@@ -60,14 +61,20 @@ class ProcessingEngine: ObservableObject {
         return nil
     }
 
-    func cancel() { cancelled = true }
+    func cancel() {
+        lock.lock()
+        _cancelled = true
+        let p = _currentProcess
+        lock.unlock()
+        p?.terminate()
+    }
 
     // MARK: - Image Processing
 
     func startImages(files: [FileItem], format: ImageOutputFormat, suffix: String,
                      stripMetadata: Bool, colorIndex: Int, quality: Int, oxipngLevel: Int) {
-        runBatch(files: files) { paths, file in
-            try Self.processImage(
+        runBatch(files: files) { [self] paths, file in
+            try self.processImage(
                 paths: paths, url: file.url, format: format,
                 suffix: suffix, stripMetadata: stripMetadata,
                 colorIndex: colorIndex, quality: quality, oxipngLevel: oxipngLevel
@@ -79,8 +86,8 @@ class ProcessingEngine: ObservableObject {
 
     func startVideo(files: [FileItem], format: VideoOutputFormat, suffix: String,
                     stripMetadata: Bool, dimension: DimensionPreset, crf: Int) {
-        runBatch(files: files) { paths, file in
-            try Self.processVideo(
+        runBatch(files: files) { [self] paths, file in
+            try self.processVideo(
                 paths: paths, url: file.url, format: format,
                 suffix: suffix, stripMetadata: stripMetadata,
                 dimension: dimension, crf: crf
@@ -92,9 +99,9 @@ class ProcessingEngine: ObservableObject {
 
     func startAudio(files: [FileItem], format: AudioOutputFormat, suffix: String,
                     stripMetadata: Bool, bitrate: Int) {
-        runBatch(files: files) { paths, file in
+        runBatch(files: files) { [self] paths, file in
             let trackIndex = file.audioTracks.count > 1 ? file.selectedAudioTrack : nil
-            return try Self.processAudio(
+            return try self.processAudio(
                 paths: paths, url: file.url, format: format,
                 suffix: suffix, stripMetadata: stripMetadata, bitrate: bitrate,
                 audioStreamIndex: trackIndex
@@ -180,8 +187,12 @@ class ProcessingEngine: ObservableObject {
                     let afterKB = afterSize / 1024
                     DispatchQueue.main.async { file.status = .done(beforeKB: beforeKB, afterKB: afterKB) }
                 } catch {
-                    let msg = error.localizedDescription
-                    DispatchQueue.main.async { file.status = .error(msg) }
+                    if self?.cancelled == true {
+                        DispatchQueue.main.async { file.status = nil }
+                    } else {
+                        let msg = error.localizedDescription
+                        DispatchQueue.main.async { file.status = .error(msg) }
+                    }
                 }
             }
 
@@ -215,13 +226,13 @@ class ProcessingEngine: ObservableObject {
 
     // MARK: - Image Pipeline
 
-    private static func processImage(
+    private func processImage(
         paths: [String: String], url: URL, format: ImageOutputFormat,
         suffix: String, stripMetadata: Bool, colorIndex: Int, quality: Int,
         oxipngLevel: Int
     ) throws -> String {
         let input = url.path(percentEncoded: false)
-        let finalOutput = outputPath(for: url, suffix: suffix, ext: format.ext)
+        let finalOutput = Self.outputPath(for: url, suffix: suffix, ext: format.ext)
         let output = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".\(format.ext)").path
         defer { try? FileManager.default.removeItem(atPath: output) }
@@ -277,12 +288,12 @@ class ProcessingEngine: ObservableObject {
 
     // MARK: - Video Pipeline
 
-    private static func processVideo(
+    private func processVideo(
         paths: [String: String], url: URL, format: VideoOutputFormat,
         suffix: String, stripMetadata: Bool, dimension: DimensionPreset, crf: Int
     ) throws -> String {
         let input = url.path(percentEncoded: false)
-        let finalOutput = outputPath(for: url, suffix: suffix, ext: format.ext)
+        let finalOutput = Self.outputPath(for: url, suffix: suffix, ext: format.ext)
         let output = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".\(format.ext)").path
         defer { try? FileManager.default.removeItem(atPath: output) }
@@ -354,13 +365,13 @@ class ProcessingEngine: ObservableObject {
 
     // MARK: - Audio Pipeline
 
-    private static func processAudio(
+    private func processAudio(
         paths: [String: String], url: URL, format: AudioOutputFormat,
         suffix: String, stripMetadata: Bool, bitrate: Int,
         audioStreamIndex: Int? = nil
     ) throws -> String {
         let input = url.path(percentEncoded: false)
-        let finalOutput = outputPath(for: url, suffix: suffix, ext: format.ext)
+        let finalOutput = Self.outputPath(for: url, suffix: suffix, ext: format.ext)
         let output = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".\(format.ext)").path
         defer { try? FileManager.default.removeItem(atPath: output) }
@@ -406,17 +417,20 @@ class ProcessingEngine: ObservableObject {
 
     // MARK: - Shell Execution
 
-    private static func runDirect(_ exe: String, _ args: [String]) throws {
+    private func runDirect(_ exe: String, _ args: [String]) throws {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: exe)
         p.arguments = args
         let errPipe = Pipe()
         p.standardError = errPipe
         p.standardOutput = FileHandle.nullDevice
+        lock.lock(); _currentProcess = p; lock.unlock()
         try p.run()
         let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
-        guard p.terminationStatus == 0 else {
+        lock.lock(); _currentProcess = nil; let wasCancelled = _cancelled; lock.unlock()
+        guard !wasCancelled && p.terminationStatus == 0 else {
+            if wasCancelled { throw CancellationError() }
             let errString = String(data: errData, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let msg = errString.isEmpty ? "exit \(p.terminationStatus)"
@@ -425,7 +439,7 @@ class ProcessingEngine: ObservableObject {
         }
     }
 
-    private static func run(_ paths: [String: String], _ tool: String, _ args: [String]) throws {
+    private func run(_ paths: [String: String], _ tool: String, _ args: [String]) throws {
         guard let exe = paths[tool] else { throw OptaError.toolNotFound(tool) }
         try runDirect(exe, args)
     }
