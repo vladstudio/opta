@@ -42,7 +42,7 @@ class ProcessingEngine: ObservableObject {
                 missing.append(name)
             }
         }
-        guard !missing.isEmpty else { return nil }
+        if missing.isEmpty { return nil }
 
         switch tab {
         case .images:
@@ -324,28 +324,15 @@ class ProcessingEngine: ObservableObject {
             try runDirect(ffmpeg, args)
 
         case .webmVP9:
-            // Two-pass for best quality
             let passLogFile = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString).path
-
-            // Pass 1
-            var pass1 = ["-i", input, "-c:v", "libvpx-vp9", "-crf", "\(crf)", "-b:v", "0",
-                         "-cpu-used", "0", "-row-mt", "1"]
-            if !filters.isEmpty { pass1 += ["-vf", filters.joined(separator: ",")] }
-            pass1 += ["-pass", "1", "-passlogfile", passLogFile, "-an", "-f", "null", "/dev/null"]
-            try runDirect(ffmpeg, pass1)
-
-            // Pass 2
-            var pass2 = ["-i", input, "-c:v", "libvpx-vp9", "-crf", "\(crf)", "-b:v", "0",
-                         "-cpu-used", "0", "-row-mt", "1"]
-            if !filters.isEmpty { pass2 += ["-vf", filters.joined(separator: ",")] }
-            pass2 += ["-pass", "2", "-passlogfile", passLogFile,
-                      "-c:a", "libopus", "-b:a", "192k"]
+            var base = ["-i", input, "-c:v", "libvpx-vp9", "-crf", "\(crf)", "-b:v", "0",
+                        "-cpu-used", "0", "-row-mt", "1"]
+            if !filters.isEmpty { base += ["-vf", filters.joined(separator: ",")] }
+            try runDirect(ffmpeg, base + ["-pass", "1", "-passlogfile", passLogFile, "-an", "-f", "null", "/dev/null"])
+            var pass2 = base + ["-pass", "2", "-passlogfile", passLogFile, "-c:a", "libopus", "-b:a", "192k"]
             if stripMetadata { pass2 += ["-map_metadata", "-1"] }
-            pass2 += ["-y", output]
-            try runDirect(ffmpeg, pass2)
-
-            // Clean up pass log
+            try runDirect(ffmpeg, pass2 + ["-y", output])
             try? FileManager.default.removeItem(atPath: passLogFile + "-0.log")
 
         case .gif:

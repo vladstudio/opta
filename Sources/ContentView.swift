@@ -35,13 +35,15 @@ struct ContentView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
 
-    private var currentFiles: [FileItem] {
-        switch selectedTab {
+    private func files(for tab: MediaTab) -> [FileItem] {
+        switch tab {
         case .images: return imageFiles
         case .video: return videoFiles
         case .audio: return audioFiles
         }
     }
+
+    private var currentFiles: [FileItem] { files(for: selectedTab) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -108,18 +110,7 @@ struct ContentView: View {
     // MARK: - Tab Bar
 
     private func hasUnprocessedFiles(for tab: MediaTab) -> Bool {
-        let files: [FileItem]
-        switch tab {
-        case .images: files = imageFiles
-        case .video: files = videoFiles
-        case .audio: files = audioFiles
-        }
-        return files.contains { item in
-            switch item.status {
-            case .none: return true
-            default: return false
-            }
-        }
+        files(for: tab).contains { $0.status == nil }
     }
 
     private func tabLabel(for tab: MediaTab) -> String {

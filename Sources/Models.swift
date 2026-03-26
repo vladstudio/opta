@@ -20,13 +20,7 @@ enum ImageOutputFormat: String, CaseIterable {
     case jpg = "JPG"
     case webp = "WebP"
 
-    var ext: String {
-        switch self {
-        case .png: return "png"
-        case .jpg: return "jpg"
-        case .webp: return "webp"
-        }
-    }
+    var ext: String { rawValue.lowercased() }
 }
 
 // MARK: - Video Types
