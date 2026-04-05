@@ -64,10 +64,10 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 480, maxWidth: 480, minHeight: 450)
-        .onChange(of: appState.pendingURLs) { newValue in
-            guard !newValue.isEmpty else { return }
+        .onChange(of: appState.pendingURLs) {
+            guard !appState.pendingURLs.isEmpty else { return }
             let wasEmpty = imageFiles.isEmpty && videoFiles.isEmpty && audioFiles.isEmpty
-            for url in newValue { addFile(url) }
+            for url in appState.pendingURLs { addFile(url) }
             appState.pendingURLs.removeAll()
             if wasEmpty {
                 if !imageFiles.isEmpty { selectedTab = .images }
@@ -75,12 +75,12 @@ struct ContentView: View {
                 else if !audioFiles.isEmpty { selectedTab = .audio }
             }
         }
-        .onChange(of: videoFormat) { newFormat in
-            videoCRF = newFormat.crfDefault
+        .onChange(of: videoFormat) {
+            videoCRF = videoFormat.crfDefault
         }
-        .onChange(of: audioFormat) { newFormat in
-            let steps = newFormat.bitrateSteps
-            if let idx = steps.firstIndex(of: newFormat.bitrateDefault) {
+        .onChange(of: audioFormat) {
+            let steps = audioFormat.bitrateSteps
+            if let idx = steps.firstIndex(of: audioFormat.bitrateDefault) {
                 audioBitrateIndex = idx
             } else {
                 audioBitrateIndex = max(0, steps.count - 1)
@@ -127,7 +127,7 @@ struct ContentView: View {
         .disabled(engine.isProcessing)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .onChange(of: selectedTab) { _ in selection.removeAll() }
+        .onChange(of: selectedTab) { selection.removeAll() }
     }
 
     // MARK: - File List
@@ -478,8 +478,9 @@ struct FileRowView: View {
             ProgressView()
                 .controlSize(.small)
         case .done(let before, let after):
-            Text(before > 0 ? "\(after * 100 / before)%" : "done")
-                .foregroundStyle(.green)
+            let pct = before > 0 ? Int(after * 100 / before) : 0
+            Text(before > 0 ? "\(pct)%" : "done")
+                .foregroundStyle(pct > 100 ? .orange : .green)
                 .font(.caption)
         case .error(let msg):
             Text(msg)

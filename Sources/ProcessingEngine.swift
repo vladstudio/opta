@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import UserNotifications
 
 enum OptaError: LocalizedError {
@@ -123,9 +124,11 @@ class ProcessingEngine: ObservableObject {
     }
 
     func findToolSync(_ name: String) -> String? {
-        if let cached = toolPaths[name] { return cached }
+        lock.lock()
+        if let cached = toolPaths[name] { lock.unlock(); return cached }
+        lock.unlock()
         if let path = findTool(name) {
-            toolPaths[name] = path
+            lock.lock(); toolPaths[name] = path; lock.unlock()
             return path
         }
         return nil
@@ -176,7 +179,7 @@ class ProcessingEngine: ObservableObject {
         let startTime = Date()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             for file in files {
-                if self?.cancelled == true { break }
+                guard let self, !self.cancelled else { break }
 
                 DispatchQueue.main.async { file.status = .working }
 
@@ -187,7 +190,7 @@ class ProcessingEngine: ObservableObject {
                     let afterKB = afterSize / 1024
                     DispatchQueue.main.async { file.status = .done(beforeKB: beforeKB, afterKB: afterKB) }
                 } catch {
-                    if self?.cancelled == true {
+                    if self.cancelled {
                         DispatchQueue.main.async { file.status = nil }
                     } else {
                         let msg = error.localizedDescription
@@ -271,9 +274,7 @@ class ProcessingEngine: ObservableObject {
             args += ["-o", "\(oxipngLevel)", "--out", output, current]
             try run(paths, "oxipng", args)
         case .jpg:
-            var args = ["-s", "format", "jpeg", "-s", "formatOptions", "\(quality)"]
-            args += [current, "--out", output]
-            try runDirect("/usr/bin/sips", args)
+            try writeJPEG(from: current, to: output, quality: quality, stripMetadata: stripMetadata)
         case .webp:
             var args: [String] = []
             if stripMetadata { args += ["-metadata", "none"] }
@@ -284,6 +285,29 @@ class ProcessingEngine: ObservableObject {
         try? FileManager.default.removeItem(atPath: finalOutput)
         try FileManager.default.moveItem(atPath: output, toPath: finalOutput)
         return finalOutput
+    }
+
+    private func writeJPEG(from inputPath: String, to outputPath: String, quality: Int, stripMetadata: Bool) throws {
+        let srcURL = URL(fileURLWithPath: inputPath) as CFURL
+        guard let source = CGImageSourceCreateWithURL(srcURL, nil) else {
+            throw OptaError.toolFailed("image", "Failed to read image")
+        }
+        let destURL = URL(fileURLWithPath: outputPath) as CFURL
+        guard let dest = CGImageDestinationCreateWithURL(destURL, "public.jpeg" as CFString, 1, nil) else {
+            throw OptaError.toolFailed("image", "Failed to create JPEG writer")
+        }
+        let opts: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: Double(quality) / 100.0]
+        if stripMetadata {
+            guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                throw OptaError.toolFailed("image", "Failed to decode image")
+            }
+            CGImageDestinationAddImage(dest, image, opts as CFDictionary)
+        } else {
+            CGImageDestinationAddImageFromSource(dest, source, 0, opts as CFDictionary)
+        }
+        guard CGImageDestinationFinalize(dest) else {
+            throw OptaError.toolFailed("image", "Failed to write JPEG")
+        }
     }
 
     // MARK: - Video Pipeline
@@ -326,6 +350,7 @@ class ProcessingEngine: ObservableObject {
         case .webmVP9:
             let passLogFile = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString).path
+            defer { try? FileManager.default.removeItem(atPath: passLogFile + "-0.log") }
             var base = ["-i", input, "-c:v", "libvpx-vp9", "-crf", "\(crf)", "-b:v", "0",
                         "-cpu-used", "0", "-row-mt", "1"]
             if !filters.isEmpty { base += ["-vf", filters.joined(separator: ",")] }
@@ -333,7 +358,6 @@ class ProcessingEngine: ObservableObject {
             var pass2 = base + ["-pass", "2", "-passlogfile", passLogFile, "-c:a", "libopus", "-b:a", "192k"]
             if stripMetadata { pass2 += ["-map_metadata", "-1"] }
             try runDirect(ffmpeg, pass2 + ["-y", output])
-            try? FileManager.default.removeItem(atPath: passLogFile + "-0.log")
 
         case .gif:
             // Two-pass palette generation for best quality
@@ -412,7 +436,10 @@ class ProcessingEngine: ObservableObject {
         p.standardError = errPipe
         p.standardOutput = FileHandle.nullDevice
         lock.lock(); _currentProcess = p; lock.unlock()
-        try p.run()
+        do { try p.run() } catch {
+            lock.lock(); _currentProcess = nil; lock.unlock()
+            throw error
+        }
         let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
         lock.lock(); _currentProcess = nil; let wasCancelled = _cancelled; lock.unlock()
