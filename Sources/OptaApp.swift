@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UserNotifications
 
@@ -38,5 +39,12 @@ struct OptaApp: App {
         }
         .defaultSize(width: 480, height: 400)
         .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Opta") {
+                    NSWorkspace.shared.open(URL(string: "https://apps.vlad.studio/opta")!)
+                }
+            }
+        }
     }
 }
