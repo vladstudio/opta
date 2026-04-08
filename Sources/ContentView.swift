@@ -220,7 +220,7 @@ struct ContentView: View {
                 }
             }
 
-            optimizeButton(disabled: imageFiles.isEmpty)
+            optimizeButton(disabled: !imageFiles.contains { $0.status == nil })
         }
         .padding()
     }
@@ -265,7 +265,7 @@ struct ContentView: View {
                 }
             }
 
-            optimizeButton(disabled: videoFiles.isEmpty)
+            optimizeButton(disabled: !videoFiles.contains { $0.status == nil })
         }
         .padding()
     }
@@ -327,7 +327,7 @@ struct ContentView: View {
                 }
             }
 
-            optimizeButton(disabled: audioFiles.isEmpty)
+            optimizeButton(disabled: !audioFiles.contains { $0.status == nil })
         }
         .padding()
     }
@@ -388,19 +388,23 @@ struct ContentView: View {
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        var switchedTab = false
+        let group = DispatchGroup()
+        var urls: [URL] = []
+        let urlLock = NSLock()
         for provider in providers {
+            group.enter()
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
+                defer { group.leave() }
                 guard let data = item as? Data,
                       let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                DispatchQueue.main.async {
-                    if !switchedTab, let tab = classifyFile(url.standardizedFileURL) {
-                        selectedTab = tab
-                        switchedTab = true
-                    }
-                    addFile(url)
-                }
+                urlLock.lock(); urls.append(url); urlLock.unlock()
             }
+        }
+        group.notify(queue: .main) {
+            if let first = urls.first, let tab = classifyFile(first.standardizedFileURL) {
+                selectedTab = tab
+            }
+            for url in urls { addFile(url) }
         }
         return true
     }
@@ -414,22 +418,28 @@ struct ContentView: View {
 
         switch selectedTab {
         case .images:
+            let pending = imageFiles.filter { $0.status == nil }
+            guard !pending.isEmpty else { return }
             engine.startImages(
-                files: imageFiles, format: imageFormat, suffix: imageSuffix,
+                files: pending, format: imageFormat, suffix: imageSuffix,
                 stripMetadata: imageStripMetadata, colorIndex: Int(imageColorIndex),
                 quality: Int(imageQuality), oxipngLevel: 6
             )
         case .video:
+            let pending = videoFiles.filter { $0.status == nil }
+            guard !pending.isEmpty else { return }
             engine.startVideo(
-                files: videoFiles, format: videoFormat, suffix: videoSuffix,
+                files: pending, format: videoFormat, suffix: videoSuffix,
                 stripMetadata: videoStripMetadata, dimension: videoDimension,
                 crf: Int(videoCRF)
             )
         case .audio:
+            let pending = audioFiles.filter { $0.status == nil }
+            guard !pending.isEmpty else { return }
             let steps = audioFormat.bitrateSteps
             let bitrate = steps.isEmpty ? 0 : steps[min(audioBitrateIndex, steps.count - 1)]
             engine.startAudio(
-                files: audioFiles, format: audioFormat, suffix: audioSuffix,
+                files: pending, format: audioFormat, suffix: audioSuffix,
                 stripMetadata: audioStripMetadata, bitrate: bitrate
             )
         }

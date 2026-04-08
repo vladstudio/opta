@@ -38,7 +38,7 @@ class ProcessingEngine: ObservableObject {
         var missing: [String] = []
         for name in required {
             if let path = findTool(name) {
-                toolPaths[name] = path
+                lock.lock(); toolPaths[name] = path; lock.unlock()
             } else {
                 missing.append(name)
             }
@@ -175,7 +175,7 @@ class ProcessingEngine: ObservableObject {
         cancelled = false
         for file in files { file.status = .waiting }
 
-        let paths = toolPaths
+        lock.lock(); let paths = toolPaths; lock.unlock()
         let startTime = Date()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             for file in files {
@@ -348,9 +348,11 @@ class ProcessingEngine: ObservableObject {
             try runDirect(ffmpeg, args)
 
         case .webmVP9:
-            let passLogFile = FileManager.default.temporaryDirectory
-                .appendingPathComponent(UUID().uuidString).path
-            defer { try? FileManager.default.removeItem(atPath: passLogFile + "-0.log") }
+            let passDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("opta-vp9-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: passDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: passDir) }
+            let passLogFile = passDir.appendingPathComponent("pass").path
             var base = ["-i", input, "-c:v", "libvpx-vp9", "-crf", "\(crf)", "-b:v", "0",
                         "-cpu-used", "0", "-row-mt", "1"]
             if !filters.isEmpty { base += ["-vf", filters.joined(separator: ",")] }
@@ -445,7 +447,8 @@ class ProcessingEngine: ObservableObject {
         lock.lock(); _currentProcess = nil; let wasCancelled = _cancelled; lock.unlock()
         guard !wasCancelled && p.terminationStatus == 0 else {
             if wasCancelled { throw CancellationError() }
-            let errString = String(data: errData, encoding: .utf8)?
+            let tail = errData.count > 64_000 ? errData.suffix(64_000) : errData
+            let errString = String(data: tail, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let msg = errString.isEmpty ? "exit \(p.terminationStatus)"
                 : String(errString.suffix(500))
