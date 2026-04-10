@@ -330,7 +330,7 @@ class ProcessingEngine: ObservableObject {
 
         switch format {
         case .mp4H264, .mov:
-            var args = ["-i", input, "-c:v", "libx264", "-preset", "veryslow", "-tune", "film", "-crf", "\(crf)"]
+            var args = ["-i", input, "-c:v", "libx264", "-preset", "veryslow", "-tune", "film", "-crf", "\(crf)", "-refs", "4"]
             if !filters.isEmpty { args += ["-vf", filters.joined(separator: ",")] }
             args += ["-c:a", "aac", "-b:a", "256k"]
             if stripMetadata { args += ["-map_metadata", "-1"] }
