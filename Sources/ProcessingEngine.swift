@@ -330,7 +330,7 @@ class ProcessingEngine: ObservableObject {
 
         switch format {
         case .mp4H264, .mov:
-            var args = ["-i", input, "-c:v", "libx264", "-preset", "veryslow", "-tune", "film", "-crf", "\(crf)", "-refs", "4"]
+            var args = ["-nostdin", "-i", input, "-c:v", "libx264", "-preset", "veryslow", "-tune", "film", "-crf", "\(crf)", "-refs", "4"]
             if !filters.isEmpty { args += ["-vf", filters.joined(separator: ",")] }
             args += ["-c:a", "aac", "-b:a", "256k"]
             if stripMetadata { args += ["-map_metadata", "-1"] }
@@ -339,7 +339,7 @@ class ProcessingEngine: ObservableObject {
             try runDirect(ffmpeg, args)
 
         case .mp4H265:
-            var args = ["-i", input, "-c:v", "libx265", "-preset", "veryslow", "-crf", "\(crf)"]
+            var args = ["-nostdin", "-i", input, "-c:v", "libx265", "-preset", "veryslow", "-crf", "\(crf)"]
             if !filters.isEmpty { args += ["-vf", filters.joined(separator: ",")] }
             args += ["-c:a", "aac", "-b:a", "256k"]
             if stripMetadata { args += ["-map_metadata", "-1"] }
@@ -353,7 +353,7 @@ class ProcessingEngine: ObservableObject {
             try FileManager.default.createDirectory(at: passDir, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: passDir) }
             let passLogFile = passDir.appendingPathComponent("pass").path
-            var base = ["-i", input, "-c:v", "libvpx-vp9", "-crf", "\(crf)", "-b:v", "0",
+            var base = ["-nostdin", "-i", input, "-c:v", "libvpx-vp9", "-crf", "\(crf)", "-b:v", "0",
                         "-cpu-used", "0", "-row-mt", "1"]
             if !filters.isEmpty { base += ["-vf", filters.joined(separator: ",")] }
             try runDirect(ffmpeg, base + ["-pass", "1", "-passlogfile", passLogFile, "-an", "-f", "null", "/dev/null"])
@@ -365,7 +365,7 @@ class ProcessingEngine: ObservableObject {
             // Two-pass palette generation for best quality
             let filterStr = filters.isEmpty ? "" : filters.joined(separator: ",") + ","
             let paletteFilter = "\(filterStr)split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=floyd_steinberg"
-            var args = ["-i", input, "-lavfi", paletteFilter]
+            var args = ["-nostdin", "-i", input, "-lavfi", paletteFilter]
             if stripMetadata { args += ["-map_metadata", "-1"] }
             args += ["-y", output]
             try runDirect(ffmpeg, args)
@@ -390,7 +390,7 @@ class ProcessingEngine: ObservableObject {
         defer { try? FileManager.default.removeItem(atPath: output) }
         guard let ffmpeg = paths["ffmpeg"] else { throw OptaError.toolNotFound("ffmpeg") }
 
-        var args = ["-i", input]
+        var args = ["-nostdin", "-i", input]
         if let idx = audioStreamIndex {
             args += ["-map", "0:a:\(idx)"]
         }
@@ -437,6 +437,7 @@ class ProcessingEngine: ObservableObject {
         let errPipe = Pipe()
         p.standardError = errPipe
         p.standardOutput = FileHandle.nullDevice
+        p.standardInput = FileHandle.nullDevice
         lock.lock(); _currentProcess = p; lock.unlock()
         do { try p.run() } catch {
             lock.lock(); _currentProcess = nil; lock.unlock()
