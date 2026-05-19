@@ -99,6 +99,10 @@ struct ContentView: View {
         .onDeleteCommand {
             model.removeSelected(from: model.selectedTab, isProcessing: engine.isProcessing)
         }
+        .onKeyPress(.space) {
+            previewer.preview(model.previewURLs())
+            return .handled
+        }
         .onDrop(of: [.fileURL], isTargeted: nil, perform: handleDrop)
         .overlay {
             if model.currentFiles.isEmpty && !engine.isProcessing {
