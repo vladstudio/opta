@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @StateObject private var engine = ProcessingEngine()
+    @StateObject private var recorder = ScreenRecorder()
     @State private var selectedTab: MediaTab = .images
 
     // Per-tab file lists
@@ -132,6 +133,16 @@ struct ContentView: View {
 
     // MARK: - File List
 
+    private func removeFile(_ file: FileItem) {
+        guard !engine.isProcessing else { return }
+        switch selectedTab {
+        case .images: imageFiles.removeAll { $0.id == file.id }
+        case .video: videoFiles.removeAll { $0.id == file.id }
+        case .audio: audioFiles.removeAll { $0.id == file.id }
+        }
+        selection.remove(file.id)
+    }
+
     private func removeSelected() {
         guard !engine.isProcessing else { return }
         let ids = selection
@@ -147,8 +158,23 @@ struct ContentView: View {
         List(selection: $selection) {
             ForEach(currentFiles) { file in
                 FileRowView(file: file)
-                    .onTapGesture(count: 2) {
-                        NSWorkspace.shared.activateFileViewerSelecting([file.url])
+                    .simultaneousGesture(
+                        TapGesture(count: 2).onEnded {
+                            NSWorkspace.shared.activateFileViewerSelecting([file.url])
+                        }
+                    )
+                    .contextMenu {
+                        Button("Reveal in Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([file.url])
+                        }
+                        Button("Remove from List") {
+                            if selection.contains(file.id) {
+                                removeSelected()
+                            } else {
+                                removeFile(file)
+                            }
+                        }
+                        .disabled(engine.isProcessing)
                     }
             }
         }
@@ -193,17 +219,15 @@ struct ContentView: View {
             HStack {
                 Button("Add Files...") { addFiles() }
                 Spacer()
-                Text("Save as")
-                    .foregroundStyle(.secondary)
                 Picker("Format", selection: $imageFormat) {
                     ForEach(ImageOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
                 .fixedSize()
-                TextField("optional suffix", text: $imageSuffix)
+                TextField("suffix", text: $imageSuffix)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 120)
+                    .frame(width: 80)
             }
 
             Toggle("Strip metadata", isOn: $imageStripMetadata)
@@ -231,17 +255,16 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Button("Add Files...") { addFiles() }
+                Button(recorder.isRecording ? "Stop Recording" : "Record Screen...") { recordScreen() }
                 Spacer()
-                Text("Save as")
-                    .foregroundStyle(.secondary)
                 Picker("Format", selection: $videoFormat) {
                     ForEach(VideoOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
                 }
                 .labelsHidden()
                 .fixedSize()
-                TextField("optional suffix", text: $videoSuffix)
+                TextField("suffix", text: $videoSuffix)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 120)
+                    .frame(width: 80)
             }
 
             Toggle("Strip metadata", isOn: $videoStripMetadata)
@@ -299,16 +322,14 @@ struct ContentView: View {
             HStack {
                 Button("Add Files...") { addFiles() }
                 Spacer()
-                Text("Save as")
-                    .foregroundStyle(.secondary)
                 Picker("Format", selection: $audioFormat) {
                     ForEach(AudioOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
                 }
                 .labelsHidden()
                 .fixedSize()
-                TextField("optional suffix", text: $audioSuffix)
+                TextField("suffix", text: $audioSuffix)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 120)
+                    .frame(width: 80)
             }
 
             Toggle("Strip metadata", isOn: $audioStripMetadata)
@@ -361,6 +382,23 @@ struct ContentView: View {
 
         guard panel.runModal() == .OK else { return }
         for url in panel.urls { addFile(url) }
+    }
+
+    private func recordScreen() {
+        if recorder.isRecording {
+            recorder.stop()
+        } else {
+            recorder.start(
+                onFinish: { url in
+                    selectedTab = .video
+                    addFile(url)
+                },
+                onError: { err in
+                    alertMessage = err
+                    showAlert = true
+                }
+            )
+        }
     }
 
     private func addFile(_ url: URL) {
@@ -471,6 +509,7 @@ struct FileRowView: View {
             }
             statusLabel
         }
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
