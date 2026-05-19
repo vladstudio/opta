@@ -2,8 +2,27 @@ import AppKit
 import SwiftUI
 import UserNotifications
 
+enum AppCommand {
+    case selectTab(MediaTab)
+    case previewSelection
+    case trashSelection
+}
+
 class AppState: ObservableObject {
     @Published var pendingURLs: [URL] = []
+    @Published private(set) var commandSerial = 0
+
+    private(set) var pendingCommand: AppCommand?
+
+    func send(_ command: AppCommand) {
+        pendingCommand = command
+        commandSerial &+= 1
+    }
+
+    func consumeCommand() -> AppCommand? {
+        defer { pendingCommand = nil }
+        return pendingCommand
+    }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -48,6 +67,33 @@ struct OptaApp: App {
                 Button("About Opta") {
                     NSWorkspace.shared.open(URL(string: "https://apps.vlad.studio/opta")!)
                 }
+            }
+            CommandMenu("Tabs") {
+                Button("Images") {
+                    appDelegate.appState.send(.selectTab(.images))
+                }
+                .keyboardShortcut("1", modifiers: .command)
+
+                Button("Video") {
+                    appDelegate.appState.send(.selectTab(.video))
+                }
+                .keyboardShortcut("2", modifiers: .command)
+
+                Button("Audio") {
+                    appDelegate.appState.send(.selectTab(.audio))
+                }
+                .keyboardShortcut("3", modifiers: .command)
+            }
+            CommandMenu("Selection") {
+                Button("Quick Look") {
+                    appDelegate.appState.send(.previewSelection)
+                }
+                .keyboardShortcut(.space, modifiers: [])
+
+                Button("Move to Trash") {
+                    appDelegate.appState.send(.trashSelection)
+                }
+                .keyboardShortcut(.delete, modifiers: .command)
             }
         }
     }

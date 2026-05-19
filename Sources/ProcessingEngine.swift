@@ -76,6 +76,7 @@ enum ProcessingJob {
 }
 
 final class ToolResolver {
+    private let lock = NSLock()
     private var cachedPaths: [String: String] = [:]
 
     func missingTools(for job: ProcessingJob) -> [String] {
@@ -83,13 +84,18 @@ final class ToolResolver {
     }
 
     func path(for name: String) -> String? {
+        lock.lock()
         if let cached = cachedPaths[name] {
+            lock.unlock()
             return cached
         }
+        lock.unlock()
         guard let resolved = findTool(named: name) else {
             return nil
         }
+        lock.lock()
         cachedPaths[name] = resolved
+        lock.unlock()
         return resolved
     }
 
@@ -104,24 +110,37 @@ final class ToolResolver {
     }
 }
 
-actor ProcessRunner {
+final class ProcessRunner {
+    private let lock = NSLock()
     private var cancelled = false
     private var currentProcess: Process?
 
     func prepareBatch() {
+        lock.lock()
         cancelled = false
+        lock.unlock()
     }
 
     func cancel() {
+        lock.lock()
         cancelled = true
-        currentProcess?.terminate()
+        let process = currentProcess
+        lock.unlock()
+        process?.terminate()
     }
 
     func isCancelled() -> Bool {
-        cancelled
+        lock.lock()
+        let value = cancelled
+        lock.unlock()
+        return value
     }
 
-    func run(executable: String, arguments: [String]) throws {
+    func run(executable: String, arguments: [String]) async throws {
+        if isCancelled() {
+            throw CancellationError()
+        }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -129,27 +148,43 @@ actor ProcessRunner {
         process.standardError = errPipe
         process.standardOutput = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
-        currentProcess = process
-        do {
-            try process.run()
-        } catch {
-            currentProcess = nil
-            throw error
-        }
 
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        return try await withCheckedThrowingContinuation { continuation in
+            process.terminationHandler = { [weak self] process in
+                let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                self?.lock.lock()
+                let wasCancelled = self?.cancelled ?? false
+                self?.currentProcess = nil
+                self?.lock.unlock()
 
-        currentProcess = nil
-        guard !cancelled, process.terminationStatus == 0 else {
-            if cancelled {
-                throw CancellationError()
+                guard !wasCancelled, process.terminationStatus == 0 else {
+                    if wasCancelled {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+                    let tail = errData.count > 64_000 ? errData.suffix(64_000) : errData
+                    let errString = String(data: tail, encoding: .utf8)?
+                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let message = errString.isEmpty ? "exit \(process.terminationStatus)" : String(errString.suffix(500))
+                    continuation.resume(throwing: OptaError.toolFailed(executable, message))
+                    return
+                }
+
+                continuation.resume()
             }
-            let tail = errData.count > 64_000 ? errData.suffix(64_000) : errData
-            let errString = String(data: tail, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let message = errString.isEmpty ? "exit \(process.terminationStatus)" : String(errString.suffix(500))
-            throw OptaError.toolFailed(executable, message)
+
+            self.lock.lock()
+            self.currentProcess = process
+            self.lock.unlock()
+
+            do {
+                try process.run()
+            } catch {
+                self.lock.lock()
+                self.currentProcess = nil
+                self.lock.unlock()
+                continuation.resume(throwing: error)
+            }
         }
     }
 }
@@ -178,7 +213,7 @@ final class ProcessingEngine: ObservableObject {
 
     func cancel() {
         Task {
-            await runner.cancel()
+            runner.cancel()
         }
     }
 
@@ -210,11 +245,11 @@ final class ProcessingEngine: ObservableObject {
     }
 
     private func runBatch(job: ProcessingJob, files: [FileItem]) async {
-        await runner.prepareBatch()
+        runner.prepareBatch()
         let startTime = Date()
 
         for file in files {
-            if await runner.isCancelled() {
+            if runner.isCancelled() {
                 break
             }
 
@@ -233,7 +268,7 @@ final class ProcessingEngine: ObservableObject {
             }
         }
 
-        let wasCancelled = await runner.isCancelled()
+        let wasCancelled = runner.isCancelled()
         isProcessing = false
 
         if wasCancelled {
