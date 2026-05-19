@@ -6,11 +6,7 @@ struct ContentView: View {
     @StateObject private var recorder = ScreenRecorder()
     @StateObject private var previewer = QuickLookPreviewer()
     @State private var selectedTab: MediaTab = .images
-
-    // Per-tab file lists
-    @State private var imageFiles: [FileItem] = []
-    @State private var videoFiles: [FileItem] = []
-    @State private var audioFiles: [FileItem] = []
+    @State private var queues = MediaQueues()
 
     // Image controls
     @State private var imageFormat: ImageOutputFormat = .png
@@ -37,15 +33,8 @@ struct ContentView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
 
-    private func files(for tab: MediaTab) -> [FileItem] {
-        switch tab {
-        case .images: return imageFiles
-        case .video: return videoFiles
-        case .audio: return audioFiles
-        }
-    }
-
-    private var currentFiles: [FileItem] { files(for: selectedTab) }
+    private func files(for tab: MediaTab) -> [FileItem] { queues[tab] }
+    private var currentFiles: [FileItem] { queues[selectedTab] }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,13 +57,13 @@ struct ContentView: View {
         .frame(minWidth: 480, maxWidth: 480, minHeight: 450)
         .onChange(of: appState.pendingURLs) {
             guard !appState.pendingURLs.isEmpty else { return }
-            let wasEmpty = imageFiles.isEmpty && videoFiles.isEmpty && audioFiles.isEmpty
+            let wasEmpty = queues.isEmpty
             for url in appState.pendingURLs { addFile(url) }
             appState.pendingURLs.removeAll()
             if wasEmpty {
-                if !imageFiles.isEmpty { selectedTab = .images }
-                else if !videoFiles.isEmpty { selectedTab = .video }
-                else if !audioFiles.isEmpty { selectedTab = .audio }
+                if !queues.images.isEmpty { selectedTab = .images }
+                else if !queues.video.isEmpty { selectedTab = .video }
+                else if !queues.audio.isEmpty { selectedTab = .audio }
             }
         }
         .onChange(of: videoFormat) {
@@ -143,10 +132,8 @@ struct ContentView: View {
 
     private func removeFile(_ file: FileItem) {
         guard !engine.isProcessing else { return }
-        switch selectedTab {
-        case .images: imageFiles.removeAll { $0.id == file.id }
-        case .video: videoFiles.removeAll { $0.id == file.id }
-        case .audio: audioFiles.removeAll { $0.id == file.id }
+        updateFiles(for: selectedTab) { files in
+            files.removeAll { $0.id == file.id }
         }
         selection.remove(file.id)
     }
@@ -154,10 +141,8 @@ struct ContentView: View {
     private func removeSelected() {
         guard !engine.isProcessing else { return }
         let ids = selection
-        switch selectedTab {
-        case .images: imageFiles.removeAll { ids.contains($0.id) }
-        case .video: videoFiles.removeAll { ids.contains($0.id) }
-        case .audio: audioFiles.removeAll { ids.contains($0.id) }
+        updateFiles(for: selectedTab) { files in
+            files.removeAll { ids.contains($0.id) }
         }
         selection.removeAll()
     }
@@ -181,11 +166,6 @@ struct ContentView: View {
         List(selection: $selection) {
             ForEach(currentFiles) { file in
                 FileRowView(file: file)
-                    .simultaneousGesture(
-                        TapGesture(count: 2).onEnded {
-                            NSWorkspace.shared.activateFileViewerSelecting([file.url])
-                        }
-                    )
                     .contextMenu {
                         Button("Reveal in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([file.url])
@@ -275,7 +255,7 @@ struct ContentView: View {
                 }
             }
 
-            optimizeButton(disabled: !imageFiles.contains { $0.status == nil })
+            optimizeButton(disabled: !queues.images.contains { $0.status == nil })
         }
         .padding()
     }
@@ -319,7 +299,7 @@ struct ContentView: View {
                 }
             }
 
-            optimizeButton(disabled: !videoFiles.contains { $0.status == nil })
+            optimizeButton(disabled: !queues.video.contains { $0.status == nil })
         }
         .padding()
     }
@@ -379,7 +359,7 @@ struct ContentView: View {
                 }
             }
 
-            optimizeButton(disabled: !audioFiles.contains { $0.status == nil })
+            optimizeButton(disabled: !queues.audio.contains { $0.status == nil })
         }
         .padding()
     }
@@ -401,6 +381,7 @@ struct ContentView: View {
     private func addFiles() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
+        let destination = selectedTab == .audio ? MediaTab.audio : nil
 
         switch selectedTab {
         case .images:
@@ -412,7 +393,7 @@ struct ContentView: View {
         }
 
         guard panel.runModal() == .OK else { return }
-        for url in panel.urls { addFile(url) }
+        for url in panel.urls { addFile(url, preferredTab: destination) }
     }
 
     private func recordScreen() {
@@ -433,26 +414,20 @@ struct ContentView: View {
     }
 
     private func addFile(_ url: URL) {
+        addFile(url, preferredTab: nil)
+    }
+
+    private func addFile(_ url: URL, preferredTab: MediaTab?) {
         let normalized = url.standardizedFileURL
-        guard let tab = classifyFile(normalized) else { return }
+        guard let targetTab = destinationTab(for: normalized, preferredTab: preferredTab) else { return }
+        guard !queues[targetTab].contains(where: { $0.url.standardizedFileURL == normalized }) else { return }
 
-        // Video files on the audio tab → add as audio source
-        let targetTab = (tab == .video && selectedTab == .audio) ? .audio : tab
-
-        switch targetTab {
-        case .images:
-            guard !imageFiles.contains(where: { $0.url.standardizedFileURL == normalized }) else { return }
-            imageFiles.append(FileItem(url: normalized))
-        case .video:
-            guard !videoFiles.contains(where: { $0.url.standardizedFileURL == normalized }) else { return }
-            videoFiles.append(FileItem(url: normalized))
-        case .audio:
-            guard !audioFiles.contains(where: { $0.url.standardizedFileURL == normalized }) else { return }
-            let item = FileItem(url: normalized)
-            audioFiles.append(item)
-            if item.isVideoSource {
-                engine.probeAudioTracks(file: item)
-            }
+        let item = FileItem(url: normalized)
+        updateFiles(for: targetTab) { files in
+            files.append(item)
+        }
+        if targetTab == .audio && item.isVideoSource {
+            engine.probeAudioTracks(file: item)
         }
     }
 
@@ -460,6 +435,7 @@ struct ContentView: View {
         let group = DispatchGroup()
         var urls: [URL] = []
         let urlLock = NSLock()
+        let destination = selectedTab == .audio ? MediaTab.audio : nil
         for provider in providers {
             group.enter()
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
@@ -470,46 +446,83 @@ struct ContentView: View {
             }
         }
         group.notify(queue: .main) {
-            if let first = urls.first, let tab = classifyFile(first.standardizedFileURL) {
-                selectedTab = tab
+            if let firstTab = urls.compactMap({ destinationTab(for: $0.standardizedFileURL, preferredTab: destination) }).first {
+                selectedTab = firstTab
             }
-            for url in urls { addFile(url) }
+            for url in urls { addFile(url, preferredTab: destination) }
         }
         return true
     }
 
     private func optimize() {
-        if let msg = engine.checkTools(for: selectedTab) {
+        guard let request = optimizationRequest() else { return }
+        if let msg = engine.checkTools(for: request.job) {
             alertMessage = msg
             showAlert = true
             return
         }
+        engine.start(job: request.job, files: request.files)
+    }
 
+    private func updateFiles(for tab: MediaTab, _ update: (inout [FileItem]) -> Void) {
+        var files = queues[tab]
+        update(&files)
+        queues[tab] = files
+    }
+
+    private func destinationTab(for url: URL, preferredTab: MediaTab?) -> MediaTab? {
+        guard let classifiedTab = classifyFile(url) else { return nil }
+        if preferredTab == .audio && classifiedTab == .video {
+            return .audio
+        }
+        if preferredTab == nil || preferredTab == classifiedTab {
+            return classifiedTab
+        }
+        return nil
+    }
+
+    private func optimizationRequest() -> (job: ProcessingJob, files: [FileItem])? {
         switch selectedTab {
         case .images:
-            let pending = imageFiles.filter { $0.status == nil }
-            guard !pending.isEmpty else { return }
-            engine.startImages(
-                files: pending, format: imageFormat, suffix: imageSuffix,
-                stripMetadata: imageStripMetadata, colorIndex: Int(imageColorIndex),
-                quality: Int(imageQuality), oxipngLevel: 6
+            let pending = queues.images.filter { $0.status == nil }
+            guard !pending.isEmpty else { return nil }
+            return (
+                .images(ImageJob(
+                    format: imageFormat,
+                    suffix: imageSuffix,
+                    stripMetadata: imageStripMetadata,
+                    colorIndex: Int(imageColorIndex),
+                    quality: Int(imageQuality),
+                    oxipngLevel: 6
+                )),
+                pending
             )
         case .video:
-            let pending = videoFiles.filter { $0.status == nil }
-            guard !pending.isEmpty else { return }
-            engine.startVideo(
-                files: pending, format: videoFormat, suffix: videoSuffix,
-                stripMetadata: videoStripMetadata, dimension: videoDimension,
-                crf: Int(videoCRF)
+            let pending = queues.video.filter { $0.status == nil }
+            guard !pending.isEmpty else { return nil }
+            return (
+                .video(VideoJob(
+                    format: videoFormat,
+                    suffix: videoSuffix,
+                    stripMetadata: videoStripMetadata,
+                    dimension: videoDimension,
+                    crf: Int(videoCRF)
+                )),
+                pending
             )
         case .audio:
-            let pending = audioFiles.filter { $0.status == nil }
-            guard !pending.isEmpty else { return }
+            let pending = queues.audio.filter { $0.status == nil }
+            guard !pending.isEmpty else { return nil }
             let steps = audioFormat.bitrateSteps
             let bitrate = steps.isEmpty ? 0 : steps[min(audioBitrateIndex, steps.count - 1)]
-            engine.startAudio(
-                files: pending, format: audioFormat, suffix: audioSuffix,
-                stripMetadata: audioStripMetadata, bitrate: bitrate
+            return (
+                .audio(AudioJob(
+                    format: audioFormat,
+                    suffix: audioSuffix,
+                    stripMetadata: audioStripMetadata,
+                    bitrate: bitrate
+                )),
+                pending
             )
         }
     }
@@ -540,7 +553,6 @@ struct FileRowView: View {
             }
             statusLabel
         }
-        .contentShape(Rectangle())
     }
 
     @ViewBuilder

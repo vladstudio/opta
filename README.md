@@ -32,7 +32,7 @@ A simple macOS app to optimize images, video, and audio.
 
 ## Install
 
-Requires macOS 13+, Homebrew, and Xcode Command Line Tools.
+Requires macOS 15+, Homebrew, and Xcode Command Line Tools.
 
 ```bash
 git clone https://github.com/vladstudio/opta.git
@@ -40,12 +40,12 @@ cd opta
 ./install.sh
 ```
 
-This will install CLI dependencies (`pngquant`, `oxipng`, `webp`, `ffmpeg`), build a release binary, and copy it to `/usr/local/bin`.
+This installs the CLI dependencies (`pngquant`, `oxipng`, `webp`, `ffmpeg`), downloads the latest app release, and places `Opta.app` in `/Applications`.
 
 ## Usage
 
 ```bash
-opta
+open -a Opta
 ```
 
 ## How it works
@@ -54,7 +54,7 @@ opta
 1. **Input conversion** (non-PNG only) — `sips` (built into macOS) converts to PNG
 2. **Color reduction** (if not "All") — [pngquant](https://pngquant.org/)
 3. **PNG optimization** — [oxipng](https://github.com/shssoichern/oxipng) (lossless, configurable level 0–6)
-4. **JPG conversion** — `sips` (built into macOS, configurable quality)
+4. **JPG conversion** — ImageIO (built into macOS, configurable quality)
 5. **WebP conversion** — [cwebp](https://developers.google.com/speed/webp/docs/cwebp)
 
 ### Video & Audio

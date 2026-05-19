@@ -156,6 +156,33 @@ enum FileStatus {
     case waiting, working, done(beforeKB: Int64, afterKB: Int64), error(String)
 }
 
+struct MediaQueues {
+    var images: [FileItem] = []
+    var video: [FileItem] = []
+    var audio: [FileItem] = []
+
+    subscript(tab: MediaTab) -> [FileItem] {
+        get {
+            switch tab {
+            case .images: images
+            case .video: video
+            case .audio: audio
+            }
+        }
+        set {
+            switch tab {
+            case .images: images = newValue
+            case .video: video = newValue
+            case .audio: audio = newValue
+            }
+        }
+    }
+
+    var isEmpty: Bool {
+        images.isEmpty && video.isEmpty && audio.isEmpty
+    }
+}
+
 class FileItem: Identifiable, ObservableObject {
     let id = UUID()
     let url: URL
