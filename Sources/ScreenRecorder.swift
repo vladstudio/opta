@@ -12,6 +12,11 @@ final class ScreenRecorder: NSObject, ObservableObject, SCContentSharingPickerOb
         return false
     }
 
+    var isActive: Bool {
+        if case .idle = state { return false }
+        return true
+    }
+
     private var hiddenWindow: NSWindow?
     private var onFinish: ((URL) -> Void)?
     private var onError: ((String) -> Void)?
@@ -99,7 +104,7 @@ final class ScreenRecorder: NSObject, ObservableObject, SCContentSharingPickerOb
     }
 
     private func beginCapture(filter: SCContentFilter) async {
-        let url = makeOutputURL()
+        let url = desktopCaptureURL(prefix: "Screen Recording", ext: "mov")
 
         let streamConfig = SCStreamConfiguration()
         let scale = CGFloat(filter.pointPixelScale)
@@ -150,15 +155,6 @@ final class ScreenRecorder: NSObject, ObservableObject, SCContentSharingPickerOb
         hiddenWindow?.makeKeyAndOrderFront(nil)
         hiddenWindow = nil
         NSApp.activate()
-    }
-
-    private func makeOutputURL() -> URL {
-        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        let name = "Screen Recording \(formatter.string(from: Date())).mov"
-        return desktop.appendingPathComponent(name)
     }
 
 }

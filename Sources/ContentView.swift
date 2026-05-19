@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @StateObject private var engine = ProcessingEngine()
     @StateObject private var recorder = ScreenRecorder()
+    @StateObject private var screenshotter = ScreenshotCapturer()
     @StateObject private var previewer = QuickLookPreviewer()
     @StateObject private var model = WorkspaceModel()
     @EnvironmentObject private var appState: AppState
@@ -145,6 +146,8 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Button("Add Files...") { addFiles() }
+                Button("Screenshot...") { takeScreenshot() }
+                    .disabled(screenshotter.isCapturing || recorder.isActive)
                 Spacer()
                 Picker("Format", selection: $model.imageFormat) {
                     ForEach(ImageOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
@@ -181,6 +184,7 @@ struct ContentView: View {
             HStack {
                 Button("Add Files...") { addFiles() }
                 Button(recorder.isRecording ? "Stop Recording" : "Record Screen...") { recordScreen() }
+                    .disabled(screenshotter.isCapturing)
                 Spacer()
                 Picker("Format", selection: $model.videoFormat) {
                     ForEach(VideoOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
@@ -313,6 +317,18 @@ struct ContentView: View {
         recorder.start(
             onFinish: { url in
                 model.selectedTab = .video
+                model.addFile(url, preferredTab: .auto, probeAudioTracks: engine.probeAudioTracks)
+            },
+            onError: { message in
+                model.presentError(message)
+            }
+        )
+    }
+
+    private func takeScreenshot() {
+        screenshotter.start(
+            onFinish: { url in
+                model.selectedTab = .images
                 model.addFile(url, preferredTab: .auto, probeAudioTracks: engine.probeAudioTracks)
             },
             onError: { message in
