@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @StateObject private var engine = ProcessingEngine()
     @StateObject private var recorder = ScreenRecorder()
+    @StateObject private var previewer = QuickLookPreviewer()
     @State private var selectedTab: MediaTab = .images
 
     // Per-tab file lists
@@ -100,8 +101,15 @@ struct ContentView: View {
                     .keyboardShortcut("2", modifiers: .command)
                 Button("") { selectedTab = .audio }
                     .keyboardShortcut("3", modifiers: .command)
-                Button("") { if !engine.isProcessing { addFiles() } }
-                    .keyboardShortcut(.space, modifiers: [])
+                Button("") {
+                    let urls = currentFiles.filter { selection.contains($0.id) }.map { $0.url }
+                    previewer.preview(urls)
+                }
+                .keyboardShortcut(.space, modifiers: [])
+                Button("") {
+                    if !engine.isProcessing && !selection.isEmpty { trashSelected() }
+                }
+                .keyboardShortcut(.delete, modifiers: .command)
             }
             .frame(width: 0, height: 0)
             .opacity(0)
@@ -154,6 +162,21 @@ struct ContentView: View {
         selection.removeAll()
     }
 
+    private func trashFile(_ file: FileItem) {
+        guard !engine.isProcessing else { return }
+        try? FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
+        removeFile(file)
+    }
+
+    private func trashSelected() {
+        guard !engine.isProcessing else { return }
+        let toTrash = currentFiles.filter { selection.contains($0.id) }
+        for file in toTrash {
+            try? FileManager.default.trashItem(at: file.url, resultingItemURL: nil)
+        }
+        removeSelected()
+    }
+
     private var fileList: some View {
         List(selection: $selection) {
             ForEach(currentFiles) { file in
@@ -167,11 +190,19 @@ struct ContentView: View {
                         Button("Reveal in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([file.url])
                         }
-                        Button("Remove from List") {
+                        Button("Remove from List  ⌫") {
                             if selection.contains(file.id) {
                                 removeSelected()
                             } else {
                                 removeFile(file)
+                            }
+                        }
+                        .disabled(engine.isProcessing)
+                        Button("Move to Trash  ⌘⌫") {
+                            if selection.contains(file.id) {
+                                trashSelected()
+                            } else {
+                                trashFile(file)
                             }
                         }
                         .disabled(engine.isProcessing)
