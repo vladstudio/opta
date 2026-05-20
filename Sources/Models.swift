@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 // MARK: - Media Tabs
 
-enum MediaTab: String, CaseIterable {
+enum MediaTab: String, CaseIterable, Codable {
     case images = "Images"
     case video = "Video"
     case audio = "Audio"
@@ -15,7 +15,7 @@ enum MediaTab: String, CaseIterable {
 let acceptedImageTypes: [UTType] = [.png, .jpeg, .tiff, .gif, .bmp, .heic, .webP]
 let acceptedImageExtensions: Set<String> = ["png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp", "heic", "heif", "webp"]
 
-enum ImageOutputFormat: String, CaseIterable {
+enum ImageOutputFormat: String, CaseIterable, Codable {
     case png = "PNG"
     case jpg = "JPG"
     case webp = "WebP"
@@ -28,7 +28,7 @@ enum ImageOutputFormat: String, CaseIterable {
 let acceptedVideoExtensions: Set<String> = ["mp4", "mov", "avi", "mkv", "webm", "m4v", "flv", "wmv", "ts", "mts"]
 let acceptedVideoTypes: [UTType] = acceptedVideoExtensions.compactMap { UTType(filenameExtension: $0) }
 
-enum VideoOutputFormat: String, CaseIterable {
+enum VideoOutputFormat: String, CaseIterable, Codable {
     case mp4H264 = "MP4 (H.264)"
     case mp4H265 = "MP4 (H.265)"
     case webmVP9 = "WebM (VP9)"
@@ -65,7 +65,7 @@ enum VideoOutputFormat: String, CaseIterable {
     var hasCRF: Bool { self != .gif }
 }
 
-enum DimensionPreset: Int, CaseIterable {
+enum DimensionPreset: Int, CaseIterable, Codable {
     case original = 0
     case p1080 = 1080
     case p720 = 720
@@ -88,7 +88,7 @@ enum DimensionPreset: Int, CaseIterable {
 let acceptedAudioExtensions: Set<String> = ["mp3", "aac", "m4a", "flac", "wav", "ogg", "opus", "wma", "aiff", "alac"]
 let acceptedAudioTypes: [UTType] = acceptedAudioExtensions.compactMap { UTType(filenameExtension: $0) }
 
-enum AudioOutputFormat: String, CaseIterable {
+enum AudioOutputFormat: String, CaseIterable, Codable {
     case mp3 = "MP3"
     case aac = "AAC"
     case m4a = "M4A"

@@ -1,37 +1,63 @@
 import Foundation
 
+struct Settings: Codable {
+    var selectedTab: MediaTab = .images
+    var imageFormat: ImageOutputFormat = .png
+    var imageSuffix = ""
+    var imageStripMetadata = true
+    var imageColorIndex = 0.0
+    var imageQuality = 80.0
+    var videoFormat: VideoOutputFormat = .mp4H264
+    var videoSuffix = ""
+    var videoStripMetadata = true
+    var videoDimension: DimensionPreset = .original
+    var videoCRF = 30.0
+    var audioFormat: AudioOutputFormat = .mp3
+    var audioSuffix = ""
+    var audioStripMetadata = true
+    var audioBitrate = AudioOutputFormat.mp3.bitrateDefault
+
+    // Bump the suffix on any schema-breaking change; prior values reset to defaults.
+    private static let storageKey = "WorkspaceSettings.v1"
+
+    static func load() -> Settings {
+        guard
+            let data = UserDefaults.standard.data(forKey: storageKey),
+            let decoded = try? JSONDecoder().decode(Settings.self, from: data)
+        else { return Settings() }
+        return decoded
+    }
+
+    func save() {
+        let data = try! JSONEncoder().encode(self)
+        UserDefaults.standard.set(data, forKey: Self.storageKey)
+    }
+}
+
 @MainActor
 final class WorkspaceModel: ObservableObject {
-    @Published var selectedTab: MediaTab = .images
+    @Published var settings = Settings.load() { didSet { scheduleSave() } }
     @Published var queues = MediaQueues()
-
-    @Published var imageFormat: ImageOutputFormat = .png
-    @Published var imageSuffix = ""
-    @Published var imageStripMetadata = true
-    @Published var imageColorIndex = 0.0
-    @Published var imageQuality = 80.0
-
-    @Published var videoFormat: VideoOutputFormat = .mp4H264
-    @Published var videoSuffix = ""
-    @Published var videoStripMetadata = true
-    @Published var videoDimension: DimensionPreset = .original
-    @Published var videoCRF = 30.0
-
-    @Published var audioFormat: AudioOutputFormat = .mp3
-    @Published var audioSuffix = ""
-    @Published var audioStripMetadata = true
-    @Published var audioBitrateIndex = AudioOutputFormat.mp3.bitrateSteps.firstIndex(of: AudioOutputFormat.mp3.bitrateDefault) ?? 0
-
     @Published var selection: Set<FileItem.ID> = []
     @Published var showAlert = false
     @Published var alertMessage = ""
+
+    private var saveWorkItem: DispatchWorkItem?
+
+    private func scheduleSave() {
+        saveWorkItem?.cancel()
+        let snapshot = settings
+        let work = DispatchWorkItem { snapshot.save() }
+        saveWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(250), execute: work)
+    }
 
     func files(for tab: MediaTab) -> [FileItem] {
         queues[tab]
     }
 
     var currentFiles: [FileItem] {
-        queues[selectedTab]
+        queues[settings.selectedTab]
     }
 
     func ingestPendingURLs(_ urls: [URL], probeAudioTracks: (FileItem) -> Void) {
@@ -41,32 +67,21 @@ final class WorkspaceModel: ObservableObject {
             addFile(url, preferredTab: .auto, probeAudioTracks: probeAudioTracks)
         }
         guard wasEmpty else { return }
-        if !queues.images.isEmpty { selectedTab = .images }
-        else if !queues.video.isEmpty { selectedTab = .video }
-        else if !queues.audio.isEmpty { selectedTab = .audio }
+        if !queues.images.isEmpty { settings.selectedTab = .images }
+        else if !queues.video.isEmpty { settings.selectedTab = .video }
+        else if !queues.audio.isEmpty { settings.selectedTab = .audio }
     }
 
     func handleCommand(_ command: AppCommand, isProcessing: Bool, preview: ([URL]) -> Void) {
         switch command {
         case .selectTab(let tab):
             guard !isProcessing else { return }
-            selectedTab = tab
+            settings.selectedTab = tab
         case .previewSelection:
             preview(previewURLs())
         case .trashSelection:
             guard !isProcessing, !selection.isEmpty else { return }
             trashSelected()
-        }
-    }
-
-    func syncFormatDefaults() {
-        videoCRF = videoFormat.crfDefault
-
-        let steps = audioFormat.bitrateSteps
-        if let idx = steps.firstIndex(of: audioFormat.bitrateDefault) {
-            audioBitrateIndex = idx
-        } else {
-            audioBitrateIndex = max(0, steps.count - 1)
         }
     }
 
@@ -126,7 +141,7 @@ final class WorkspaceModel: ObservableObject {
             presentError("Failed to move to Trash: \(failedFiles.joined(separator: ", "))")
         }
 
-        updateFiles(for: selectedTab) { files in
+        updateFiles(for: settings.selectedTab) { files in
             files.removeAll { trashedIDs.contains($0.id) }
         }
         selection.subtract(trashedIDs)
@@ -151,12 +166,12 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func destinationForCurrentTab() -> FileDestination {
-        selectedTab == .audio ? .audioExtraction : .tab(selectedTab)
+        settings.selectedTab == .audio ? .audioExtraction : .tab(settings.selectedTab)
     }
 
     func handleDroppedURLs(_ urls: [URL], destination: FileDestination, probeAudioTracks: (FileItem) -> Void) {
         if let firstTab = urls.compactMap({ destinationTab(for: $0.standardizedFileURL, destination: destination) }).first {
-            selectedTab = firstTab
+            settings.selectedTab = firstTab
         }
         for url in urls {
             addFile(url, preferredTab: destination, probeAudioTracks: probeAudioTracks)
@@ -164,17 +179,17 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func optimizationRequest() -> (job: ProcessingJob, files: [FileItem])? {
-        switch selectedTab {
+        switch settings.selectedTab {
         case .images:
             let pending = queues.images.filter { $0.status == nil }
             guard !pending.isEmpty else { return nil }
             return (
                 .images(ImageJob(
-                    format: imageFormat,
-                    suffix: imageSuffix,
-                    stripMetadata: imageStripMetadata,
-                    colorIndex: Int(imageColorIndex),
-                    quality: Int(imageQuality),
+                    format: settings.imageFormat,
+                    suffix: settings.imageSuffix,
+                    stripMetadata: settings.imageStripMetadata,
+                    colorIndex: Int(settings.imageColorIndex),
+                    quality: Int(settings.imageQuality),
                     oxipngLevel: 6
                 )),
                 pending
@@ -184,25 +199,23 @@ final class WorkspaceModel: ObservableObject {
             guard !pending.isEmpty else { return nil }
             return (
                 .video(VideoJob(
-                    format: videoFormat,
-                    suffix: videoSuffix,
-                    stripMetadata: videoStripMetadata,
-                    dimension: videoDimension,
-                    crf: Int(videoCRF)
+                    format: settings.videoFormat,
+                    suffix: settings.videoSuffix,
+                    stripMetadata: settings.videoStripMetadata,
+                    dimension: settings.videoDimension,
+                    crf: Int(settings.videoCRF)
                 )),
                 pending
             )
         case .audio:
             let pending = queues.audio.filter { $0.status == nil }
             guard !pending.isEmpty else { return nil }
-            let steps = audioFormat.bitrateSteps
-            let bitrate = steps.isEmpty ? 0 : steps[min(audioBitrateIndex, steps.count - 1)]
             return (
                 .audio(AudioJob(
-                    format: audioFormat,
-                    suffix: audioSuffix,
-                    stripMetadata: audioStripMetadata,
-                    bitrate: bitrate
+                    format: settings.audioFormat,
+                    suffix: settings.audioSuffix,
+                    stripMetadata: settings.audioStripMetadata,
+                    bitrate: settings.audioBitrate
                 )),
                 pending
             )

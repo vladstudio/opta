@@ -37,16 +37,11 @@ struct ContentView: View {
             guard let command = appState.consumeCommand() else { return }
             model.handleCommand(command, isProcessing: engine.isProcessing, preview: previewer.preview)
         }
-        .onChange(of: model.videoFormat) {
-            model.videoCRF = model.videoFormat.crfDefault
+        .onChange(of: model.settings.videoFormat) {
+            model.settings.videoCRF = model.settings.videoFormat.crfDefault
         }
-        .onChange(of: model.audioFormat) {
-            let steps = model.audioFormat.bitrateSteps
-            if let idx = steps.firstIndex(of: model.audioFormat.bitrateDefault) {
-                model.audioBitrateIndex = idx
-            } else {
-                model.audioBitrateIndex = max(0, steps.count - 1)
-            }
+        .onChange(of: model.settings.audioFormat) {
+            model.settings.audioBitrate = model.settings.audioFormat.bitrateDefault
         }
         .alert("Error", isPresented: $model.showAlert) {
             Button("OK") {}
@@ -56,7 +51,7 @@ struct ContentView: View {
     }
 
     private var tabBar: some View {
-        Picker("", selection: $model.selectedTab) {
+        Picker("", selection: $model.settings.selectedTab) {
             ForEach(MediaTab.allCases, id: \.self) { tab in
                 Text(model.tabLabel(for: tab)).tag(tab)
             }
@@ -65,7 +60,7 @@ struct ContentView: View {
         .disabled(engine.isProcessing)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .onChange(of: model.selectedTab) {
+        .onChange(of: model.settings.selectedTab) {
             model.clearSelectionForTabChange()
         }
     }
@@ -80,9 +75,9 @@ struct ContentView: View {
                         }
                         Button("Remove from List  ⌫") {
                             if model.selection.contains(file.id) {
-                                model.removeSelected(from: model.selectedTab, isProcessing: engine.isProcessing)
+                                model.removeSelected(from: model.settings.selectedTab, isProcessing: engine.isProcessing)
                             } else {
-                                model.removeFile(file, from: model.selectedTab, isProcessing: engine.isProcessing)
+                                model.removeFile(file, from: model.settings.selectedTab, isProcessing: engine.isProcessing)
                             }
                         }
                         .disabled(engine.isProcessing)
@@ -90,7 +85,7 @@ struct ContentView: View {
                             if model.selection.contains(file.id) {
                                 model.trashSelected()
                             } else {
-                                model.trashFile(file, from: model.selectedTab, isProcessing: engine.isProcessing)
+                                model.trashFile(file, from: model.settings.selectedTab, isProcessing: engine.isProcessing)
                             }
                         }
                         .disabled(engine.isProcessing)
@@ -98,7 +93,7 @@ struct ContentView: View {
             }
         }
         .onDeleteCommand {
-            model.removeSelected(from: model.selectedTab, isProcessing: engine.isProcessing)
+            model.removeSelected(from: model.settings.selectedTab, isProcessing: engine.isProcessing)
         }
         .onKeyPress(.space) {
             previewer.preview(model.previewURLs())
@@ -119,7 +114,7 @@ struct ContentView: View {
     }
 
     private var emptyStateHint: String {
-        switch model.selectedTab {
+        switch model.settings.selectedTab {
         case .images:
             "Drop image files here"
         case .video:
@@ -131,7 +126,7 @@ struct ContentView: View {
 
     private var controls: some View {
         Group {
-            switch model.selectedTab {
+            switch model.settings.selectedTab {
             case .images:
                 imageControls
             case .video:
@@ -149,28 +144,28 @@ struct ContentView: View {
                 Button("Screenshot...") { takeScreenshot() }
                     .disabled(screenshotter.isCapturing || recorder.isActive)
                 Spacer()
-                Picker("Format", selection: $model.imageFormat) {
+                Picker("Format", selection: $model.settings.imageFormat) {
                     ForEach(ImageOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
                 .fixedSize()
-                TextField("suffix", text: $model.imageSuffix)
+                TextField("suffix", text: $model.settings.imageSuffix)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
             }
 
-            Toggle("Strip metadata", isOn: $model.imageStripMetadata)
+            Toggle("Strip metadata", isOn: $model.settings.imageStripMetadata)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Colors: \(colorLabel(Int(model.imageColorIndex)))")
-                Slider(value: $model.imageColorIndex, in: 0...Double(colorSteps.count - 1), step: 1)
+                Text("Colors: \(colorLabel(Int(model.settings.imageColorIndex)))")
+                Slider(value: $model.settings.imageColorIndex, in: 0...Double(colorSteps.count - 1), step: 1)
             }
 
-            if model.imageFormat != .png {
+            if model.settings.imageFormat != .png {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Quality: \(Int(model.imageQuality))")
-                    Slider(value: $model.imageQuality, in: 20...100, step: 2)
+                    Text("Quality: \(Int(model.settings.imageQuality))")
+                    Slider(value: $model.settings.imageQuality, in: 20...100, step: 2)
                 }
             }
 
@@ -186,21 +181,21 @@ struct ContentView: View {
                 Button(recorder.isRecording ? "Stop Recording" : "Record Screen...") { recordScreen() }
                     .disabled(screenshotter.isCapturing)
                 Spacer()
-                Picker("Format", selection: $model.videoFormat) {
+                Picker("Format", selection: $model.settings.videoFormat) {
                     ForEach(VideoOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
                 }
                 .labelsHidden()
                 .fixedSize()
-                TextField("suffix", text: $model.videoSuffix)
+                TextField("suffix", text: $model.settings.videoSuffix)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
             }
 
-            Toggle("Strip metadata", isOn: $model.videoStripMetadata)
+            Toggle("Strip metadata", isOn: $model.settings.videoStripMetadata)
 
             HStack {
                 Text("Dimensions:")
-                Picker("Dimensions", selection: $model.videoDimension) {
+                Picker("Dimensions", selection: $model.settings.videoDimension) {
                     ForEach(DimensionPreset.allCases, id: \.self) { Text($0.label) }
                 }
                 .labelsHidden()
@@ -208,10 +203,10 @@ struct ContentView: View {
                 .fixedSize()
             }
 
-            if model.videoFormat.hasCRF {
+            if model.settings.videoFormat.hasCRF {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Quality (CRF): \(Int(model.videoCRF))  —  \(crfHint(Int(model.videoCRF)))")
-                    Slider(value: $model.videoCRF, in: model.videoFormat.crfRange, step: 1)
+                    Text("Quality (CRF): \(Int(model.settings.videoCRF))  —  \(crfHint(Int(model.settings.videoCRF)))")
+                    Slider(value: $model.settings.videoCRF, in: model.settings.videoFormat.crfRange, step: 1)
                 }
             }
 
@@ -221,7 +216,7 @@ struct ContentView: View {
     }
 
     private func crfHint(_ crf: Int) -> String {
-        switch model.videoFormat {
+        switch model.settings.videoFormat {
         case .mp4H264, .mov:
             if crf <= 18 { return "visually lossless" }
             if crf <= 22 { return "high quality" }
@@ -247,28 +242,27 @@ struct ContentView: View {
             HStack {
                 Button("Add Files...") { addFiles() }
                 Spacer()
-                Picker("Format", selection: $model.audioFormat) {
+                Picker("Format", selection: $model.settings.audioFormat) {
                     ForEach(AudioOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
                 }
                 .labelsHidden()
                 .fixedSize()
-                TextField("suffix", text: $model.audioSuffix)
+                TextField("suffix", text: $model.settings.audioSuffix)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
             }
 
-            Toggle("Strip metadata", isOn: $model.audioStripMetadata)
+            Toggle("Strip metadata", isOn: $model.settings.audioStripMetadata)
 
-            if !model.audioFormat.isLossless {
-                let steps = model.audioFormat.bitrateSteps
-                let clampedIndex = min(model.audioBitrateIndex, steps.count - 1)
-                let currentBitrate = steps.isEmpty ? 0 : steps[max(0, clampedIndex)]
+            if !model.settings.audioFormat.isLossless {
+                let steps = model.settings.audioFormat.bitrateSteps
+                let index = steps.firstIndex(of: model.settings.audioBitrate) ?? 0
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Bitrate: \(currentBitrate) kbps")
+                    Text("Bitrate: \(steps[index]) kbps")
                     Slider(value: Binding(
-                        get: { Double(clampedIndex) },
-                        set: { model.audioBitrateIndex = Int($0) }
+                        get: { Double(index) },
+                        set: { model.settings.audioBitrate = steps[Int($0)] }
                     ), in: 0...Double(max(0, steps.count - 1)), step: 1)
                 }
             }
@@ -292,7 +286,7 @@ struct ContentView: View {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
 
-        switch model.selectedTab {
+        switch model.settings.selectedTab {
         case .images:
             panel.allowedContentTypes = acceptedImageTypes
         case .video:
@@ -316,7 +310,7 @@ struct ContentView: View {
 
         recorder.start(
             onFinish: { url in
-                model.selectedTab = .video
+                model.settings.selectedTab = .video
                 model.addFile(url, preferredTab: .auto, probeAudioTracks: engine.probeAudioTracks)
             },
             onError: { message in
@@ -328,7 +322,7 @@ struct ContentView: View {
     private func takeScreenshot() {
         screenshotter.start(
             onFinish: { url in
-                model.selectedTab = .images
+                model.settings.selectedTab = .images
                 model.addFile(url, preferredTab: .auto, probeAudioTracks: engine.probeAudioTracks)
             },
             onError: { message in
