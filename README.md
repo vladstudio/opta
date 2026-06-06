@@ -1,6 +1,6 @@
 # Opta
 
-<img src="icon.png" width="128" alt="Opta icon">
+<img src="opta-1024.png" width="128" alt="Opta icon">
 
 A simple macOS app to optimize images, video, and audio.
 
@@ -46,15 +46,13 @@ A simple macOS app to optimize images, video, and audio.
 
 ## Install
 
-Requires macOS 15+, Homebrew, and Xcode Command Line Tools.
+Requires macOS 15+ and [Homebrew](https://brew.sh).
 
-```bash
-git clone https://github.com/vladstudio/opta.git
-cd opta
-./install.sh
+```sh
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/vladstudio/opta/main/install.sh)"
 ```
 
-This installs the CLI dependencies (`pngquant`, `oxipng`, `webp`, `ffmpeg`), downloads the latest app release, and places `Opta.app` in `/Applications`.
+Downloads the latest release, installs the CLI dependencies (`pngquant`, `oxipng`, `webp`, `ffmpeg`) via Homebrew if missing, and places `Opta.app` in `/Applications`.
 
 ## Usage
 
