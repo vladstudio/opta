@@ -41,6 +41,8 @@ final class WorkspaceModel: ObservableObject {
     @Published var selection: Set<FileItem.ID> = []
     @Published var showAlert = false
     @Published var alertMessage = ""
+    @Published var showOverwriteAlert = false
+    @Published var overwriteAlertMessage = ""
 
     private var saveWorkItem: DispatchWorkItem?
 

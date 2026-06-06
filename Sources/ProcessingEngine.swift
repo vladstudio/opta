@@ -73,6 +73,22 @@ enum ProcessingJob {
             job.requiredTools
         }
     }
+
+    var outputSuffix: String {
+        switch self {
+        case .images(let j): j.suffix
+        case .video(let j): j.suffix
+        case .audio(let j): j.suffix
+        }
+    }
+
+    var outputExtension: String {
+        switch self {
+        case .images(let j): j.format.ext
+        case .video(let j): j.format.ext
+        case .audio(let j): j.format.ext
+        }
+    }
 }
 
 final class ToolResolver {
@@ -483,7 +499,7 @@ final class ProcessingEngine: ObservableObject {
         }
     }
 
-    private static func outputURL(for url: URL, suffix: String, ext: String) -> URL {
+    static func outputURL(for url: URL, suffix: String, ext: String) -> URL {
         url.deletingPathExtension().deletingLastPathComponent()
             .appendingPathComponent(url.deletingPathExtension().lastPathComponent + suffix)
             .appendingPathExtension(ext)

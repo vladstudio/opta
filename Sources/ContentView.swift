@@ -9,6 +9,8 @@ struct ContentView: View {
     @StateObject private var model = WorkspaceModel()
     @EnvironmentObject private var appState: AppState
 
+    @State private var pendingOverwrite: (job: ProcessingJob, safe: [FileItem], conflicting: [FileItem])?
+
     var body: some View {
         VStack(spacing: 0) {
             tabBar
@@ -47,6 +49,30 @@ struct ContentView: View {
             Button("OK") {}
         } message: {
             Text(model.alertMessage)
+        }
+        .alert("Replace original files?", isPresented: $model.showOverwriteAlert) {
+            Button("Cancel", role: .cancel) {
+                pendingOverwrite = nil
+            }
+            Button("Add Suffix") {
+                let p = pendingOverwrite
+                pendingOverwrite = nil
+                guard let p else { return }
+                for file in p.conflicting {
+                    file.status = .error("skipped — add a suffix")
+                }
+                if !p.safe.isEmpty {
+                    engine.start(job: p.job, files: p.safe)
+                }
+            }
+            Button("Replace Originals", role: .destructive) {
+                let p = pendingOverwrite
+                pendingOverwrite = nil
+                guard let p else { return }
+                engine.start(job: p.job, files: p.safe + p.conflicting)
+            }
+        } message: {
+            Text(model.overwriteAlertMessage)
         }
     }
 
@@ -361,7 +387,33 @@ struct ContentView: View {
             model.presentError(message)
             return
         }
+        let (safe, conflicting) = splitConflicts(files: request.files, job: request.job)
+        guard conflicting.isEmpty else {
+            pendingOverwrite = (job: request.job, safe: safe, conflicting: conflicting)
+            let n = conflicting.count
+            let total = request.files.count
+            let noun = n == 1 ? "file" : "files"
+            model.overwriteAlertMessage = "\(n) of \(total) \(noun) would overwrite its original — the output format and suffix match, so the new file replaces it. The other \(safe.count) are safe.\n\n• Add Suffix — optimize the safe files now; the conflicting ones are skipped so you can add a suffix and retry.\n• Replace Originals — optimize all, overwriting the conflicting originals."
+            model.showOverwriteAlert = true
+            return
+        }
         engine.start(job: request.job, files: request.files)
+    }
+
+    private func splitConflicts(files: [FileItem], job: ProcessingJob) -> (safe: [FileItem], conflicting: [FileItem]) {
+        var safe: [FileItem] = []
+        var conflicting: [FileItem] = []
+        for file in files {
+            let source = file.url.standardizedFileURL.path.lowercased()
+            let target = ProcessingEngine.outputURL(for: file.url, suffix: job.outputSuffix, ext: job.outputExtension)
+                .standardizedFileURL.path.lowercased()
+            if target == source {
+                conflicting.append(file)
+            } else {
+                safe.append(file)
+            }
+        }
+        return (safe, conflicting)
     }
 }
 
