@@ -181,8 +181,7 @@ final class WorkspaceModel: ObservableObject {
     func optimizationRequest() -> (job: ProcessingJob, files: [FileItem])? {
         switch settings.selectedTab {
         case .images:
-            let pending = queues.images.filter { $0.status == nil }
-            guard !pending.isEmpty else { return nil }
+            guard !queues.images.isEmpty else { return nil }
             return (
                 .images(ImageJob(
                     format: settings.imageFormat,
@@ -192,11 +191,10 @@ final class WorkspaceModel: ObservableObject {
                     quality: Int(settings.imageQuality),
                     oxipngLevel: 6
                 )),
-                pending
+                queues.images
             )
         case .video:
-            let pending = queues.video.filter { $0.status == nil }
-            guard !pending.isEmpty else { return nil }
+            guard !queues.video.isEmpty else { return nil }
             return (
                 .video(VideoJob(
                     format: settings.videoFormat,
@@ -205,11 +203,10 @@ final class WorkspaceModel: ObservableObject {
                     dimension: settings.videoDimension,
                     crf: Int(settings.videoCRF)
                 )),
-                pending
+                queues.video
             )
         case .audio:
-            let pending = queues.audio.filter { $0.status == nil }
-            guard !pending.isEmpty else { return nil }
+            guard !queues.audio.isEmpty else { return nil }
             return (
                 .audio(AudioJob(
                     format: settings.audioFormat,
@@ -217,7 +214,7 @@ final class WorkspaceModel: ObservableObject {
                     stripMetadata: settings.audioStripMetadata,
                     bitrate: settings.audioBitrate
                 )),
-                pending
+                queues.audio
             )
         }
     }

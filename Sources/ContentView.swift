@@ -169,7 +169,7 @@ struct ContentView: View {
                 }
             }
 
-            optimizeButton(disabled: !model.queues.images.contains { $0.status == nil })
+            optimizeButton(disabled: model.queues.images.isEmpty)
         }
         .padding()
     }
@@ -210,7 +210,7 @@ struct ContentView: View {
                 }
             }
 
-            optimizeButton(disabled: !model.queues.video.contains { $0.status == nil })
+            optimizeButton(disabled: model.queues.video.isEmpty)
         }
         .padding()
     }
@@ -267,7 +267,7 @@ struct ContentView: View {
                 }
             }
 
-            optimizeButton(disabled: !model.queues.audio.contains { $0.status == nil })
+            optimizeButton(disabled: model.queues.audio.isEmpty)
         }
         .padding()
     }
