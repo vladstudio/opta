@@ -21,7 +21,7 @@ A simple macOS app to optimize images, video, and audio.
 - Drag & drop or select video files (MP4, MOV, AVI, MKV, WebM, M4V, FLV, WMV, TS, MTS)
 - Record your screen or a window
 - Output as MP4 (H.264), MP4 (H.265), WebM (VP9), MOV, or GIF
-- Configurable CRF quality with hints (visually lossless → smaller file) and dimension presets (1080p, 720p, 480p, 360p)
+- Configurable CRF quality with hints (visually lossless → smaller file) and dimension presets (Original, 1080p, 720p, 480p, 360p)
 - Custom output filename suffix
 - Strip metadata
 
@@ -37,7 +37,7 @@ A simple macOS app to optimize images, video, and audio.
 - Before/after size comparison
 - Remove from list (⌫), Move to Trash (⌘⌫), Reveal in Finder
 - Quick Look preview (Space)
-- Tab labels show unprocessed file count (• indicator)
+- Tab labels show a • indicator when there are unprocessed files
 
 ### General
 - Keyboard shortcuts: ⌘1/2/3 for tab switching, ⌘⌫ trash, ⌫ remove, Space preview, ↵ optimize
@@ -77,6 +77,6 @@ Captured via [ScreenCaptureKit](https://developer.apple.com/documentation/screen
 
 Output is saved as `{filename}{suffix}.{ext}` in the same directory as the original. Metadata stripping via tool flags.
 
-## License
+#### License
 
 MIT
