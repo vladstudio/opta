@@ -77,6 +77,6 @@ Captured via [ScreenCaptureKit](https://developer.apple.com/documentation/screen
 
 Output is saved as `{filename}{suffix}.{ext}` in the same directory as the original. Metadata stripping via tool flags.
 
-#### License
+---
 
-MIT
+License: MIT
