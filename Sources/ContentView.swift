@@ -393,7 +393,7 @@ struct ContentView: View {
             let n = conflicting.count
             let total = request.files.count
             let noun = n == 1 ? "file" : "files"
-            model.overwriteAlertMessage = "\(n) of \(total) \(noun) would overwrite its original — the output format and suffix match, so the new file replaces it. The other \(safe.count) are safe.\n\n• Add Suffix — optimize the safe files now; the conflicting ones are skipped so you can add a suffix and retry.\n• Replace Originals — optimize all, overwriting the conflicting originals."
+            model.overwriteAlertMessage = "\(n) of \(total) \(noun) would overwrite its original.\n\n• Add Suffix — optimize the safe files now; skip the rest.\n• Replace Originals — optimize all, overwriting the conflicting originals."
             model.showOverwriteAlert = true
             return
         }
