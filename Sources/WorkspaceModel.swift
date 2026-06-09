@@ -12,13 +12,14 @@ struct Settings: Codable {
     var videoStripMetadata = true
     var videoDimension: DimensionPreset = .original
     var videoCRF = 30.0
+    var videoAudioBitrate = VideoOutputFormat.mp4H264.audioBitrateDefault
     var audioFormat: AudioOutputFormat = .mp3
     var audioSuffix = ""
     var audioStripMetadata = true
     var audioBitrate = AudioOutputFormat.mp3.bitrateDefault
 
     // Bump the suffix on any schema-breaking change; prior values reset to defaults.
-    private static let storageKey = "WorkspaceSettings.v1"
+    private static let storageKey = "WorkspaceSettings.v2"
 
     static func load() -> Settings {
         guard
@@ -203,7 +204,8 @@ final class WorkspaceModel: ObservableObject {
                     suffix: settings.videoSuffix,
                     stripMetadata: settings.videoStripMetadata,
                     dimension: settings.videoDimension,
-                    crf: Int(settings.videoCRF)
+                    crf: Int(settings.videoCRF),
+                    audioBitrate: settings.videoAudioBitrate
                 )),
                 queues.video
             )

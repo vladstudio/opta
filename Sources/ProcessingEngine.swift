@@ -45,6 +45,7 @@ struct VideoJob {
     let stripMetadata: Bool
     let dimension: DimensionPreset
     let crf: Int
+    let audioBitrate: Int
 
     var requiredTools: [String] { ["ffmpeg"] }
 }
@@ -375,16 +376,16 @@ final class ProcessingEngine: ObservableObject {
 
         switch job.format {
         case .mp4H264, .mov:
-            try await runner.run(executable: ffmpeg, arguments: h264Arguments(input: input, filters: filters, stripMetadata: job.stripMetadata, crf: job.crf, output: output.path(percentEncoded: false)))
+            try await runner.run(executable: ffmpeg, arguments: h264Arguments(input: input, filters: filters, stripMetadata: job.stripMetadata, crf: job.crf, audioBitrate: job.audioBitrate, output: output.path(percentEncoded: false)))
         case .mp4H265:
-            try await runner.run(executable: ffmpeg, arguments: h265Arguments(input: input, filters: filters, stripMetadata: job.stripMetadata, crf: job.crf, output: output.path(percentEncoded: false)))
+            try await runner.run(executable: ffmpeg, arguments: h265Arguments(input: input, filters: filters, stripMetadata: job.stripMetadata, crf: job.crf, audioBitrate: job.audioBitrate, output: output.path(percentEncoded: false)))
         case .webmVP9:
             let passDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("opta-vp9-\(UUID().uuidString)")
             try FileManager.default.createDirectory(at: passDirectory, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: passDirectory) }
             let passLog = passDirectory.appendingPathComponent("pass").path(percentEncoded: false)
             try await runner.run(executable: ffmpeg, arguments: vp9Pass1Arguments(input: input, filters: filters, crf: job.crf, passLog: passLog))
-            try await runner.run(executable: ffmpeg, arguments: vp9Pass2Arguments(input: input, filters: filters, stripMetadata: job.stripMetadata, crf: job.crf, passLog: passLog, output: output.path(percentEncoded: false)))
+            try await runner.run(executable: ffmpeg, arguments: vp9Pass2Arguments(input: input, filters: filters, stripMetadata: job.stripMetadata, crf: job.crf, audioBitrate: job.audioBitrate, passLog: passLog, output: output.path(percentEncoded: false)))
         case .gif:
             try await runner.run(executable: ffmpeg, arguments: gifArguments(input: input, filters: filters, stripMetadata: job.stripMetadata, output: output.path(percentEncoded: false)))
         }
@@ -554,12 +555,12 @@ final class ProcessingEngine: ObservableObject {
         return ["scale=-2:\(dimension.rawValue)"]
     }
 
-    private func h264Arguments(input: String, filters: [String], stripMetadata: Bool, crf: Int, output: String) -> [String] {
+    private func h264Arguments(input: String, filters: [String], stripMetadata: Bool, crf: Int, audioBitrate: Int, output: String) -> [String] {
         var arguments = ["-nostdin", "-i", input, "-c:v", "libx264", "-preset", "veryslow", "-tune", "film", "-crf", "\(crf)", "-refs", "4"]
         if !filters.isEmpty {
             arguments += ["-vf", filters.joined(separator: ",")]
         }
-        arguments += ["-c:a", "aac", "-b:a", "256k"]
+        arguments += ["-c:a", "aac", "-b:a", "\(audioBitrate)k"]
         if stripMetadata {
             arguments += ["-map_metadata", "-1"]
         }
@@ -567,12 +568,12 @@ final class ProcessingEngine: ObservableObject {
         return arguments
     }
 
-    private func h265Arguments(input: String, filters: [String], stripMetadata: Bool, crf: Int, output: String) -> [String] {
+    private func h265Arguments(input: String, filters: [String], stripMetadata: Bool, crf: Int, audioBitrate: Int, output: String) -> [String] {
         var arguments = ["-nostdin", "-i", input, "-c:v", "libx265", "-preset", "veryslow", "-crf", "\(crf)"]
         if !filters.isEmpty {
             arguments += ["-vf", filters.joined(separator: ",")]
         }
-        arguments += ["-c:a", "aac", "-b:a", "256k"]
+        arguments += ["-c:a", "aac", "-b:a", "\(audioBitrate)k"]
         if stripMetadata {
             arguments += ["-map_metadata", "-1"]
         }
@@ -589,12 +590,12 @@ final class ProcessingEngine: ObservableObject {
         return arguments
     }
 
-    private func vp9Pass2Arguments(input: String, filters: [String], stripMetadata: Bool, crf: Int, passLog: String, output: String) -> [String] {
+    private func vp9Pass2Arguments(input: String, filters: [String], stripMetadata: Bool, crf: Int, audioBitrate: Int, passLog: String, output: String) -> [String] {
         var arguments = ["-nostdin", "-i", input, "-c:v", "libvpx-vp9", "-crf", "\(crf)", "-b:v", "0", "-cpu-used", "0", "-row-mt", "1"]
         if !filters.isEmpty {
             arguments += ["-vf", filters.joined(separator: ",")]
         }
-        arguments += ["-pass", "2", "-passlogfile", passLog, "-c:a", "libopus", "-b:a", "192k"]
+        arguments += ["-pass", "2", "-passlogfile", passLog, "-c:a", "libopus", "-b:a", "\(audioBitrate)k"]
         if stripMetadata {
             arguments += ["-map_metadata", "-1"]
         }

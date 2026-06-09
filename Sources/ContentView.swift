@@ -41,6 +41,7 @@ struct ContentView: View {
         }
         .onChange(of: model.settings.videoFormat) {
             model.settings.videoCRF = model.settings.videoFormat.crfDefault
+            model.settings.videoAudioBitrate = model.settings.videoFormat.audioBitrateDefault
         }
         .onChange(of: model.settings.audioFormat) {
             model.settings.audioBitrate = model.settings.audioFormat.bitrateDefault
@@ -233,6 +234,19 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Quality (CRF): \(Int(model.settings.videoCRF))  —  \(crfHint(Int(model.settings.videoCRF)))")
                     Slider(value: $model.settings.videoCRF, in: model.settings.videoFormat.crfRange, step: 1)
+                }
+            }
+
+            if model.settings.videoFormat.hasAudio {
+                let steps = model.settings.videoFormat.audioBitrateSteps
+                let index = steps.firstIndex(of: model.settings.videoAudioBitrate) ?? 2
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Audio Bitrate: \(steps[index]) kbps")
+                    Slider(value: Binding(
+                        get: { Double(index) },
+                        set: { model.settings.videoAudioBitrate = steps[Int($0)] }
+                    ), in: 0...Double(max(0, steps.count - 1)), step: 1)
                 }
             }
 

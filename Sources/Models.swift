@@ -63,6 +63,9 @@ enum VideoOutputFormat: String, CaseIterable, Codable {
     }
 
     var hasCRF: Bool { self != .gif }
+    var hasAudio: Bool { self != .gif }
+    var audioBitrateSteps: [Int] { hasAudio ? [64, 96, 128, 160, 192, 256, 320] : [] }
+    var audioBitrateDefault: Int { hasAudio ? 128 : 0 }
 }
 
 enum DimensionPreset: Int, CaseIterable, Codable {
