@@ -1,0 +1,2 @@
+APP_NAME=Opta
+BINARY=opta

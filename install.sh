@@ -16,7 +16,6 @@ pkill -x "$APP_NAME" 2>/dev/null || true
 [ -w /Applications ] && SUDO= || SUDO=sudo
 $SUDO rm -rf "$APP_PATH"
 $SUDO ditto "$TMP/$APP_NAME.app" "$APP_PATH"
-xattr -dr com.apple.quarantine "$APP_PATH" 2>/dev/null || true
 
 # Opta shells out to these CLIs at runtime.
 if command -v brew >/dev/null 2>&1; then

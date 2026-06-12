@@ -1,7 +1,5 @@
 #!/bin/bash
-set -e
-cd "$(dirname "$0")"
+set -e; cd "$(dirname "$0")"
+source ./app.sh
 source ../app-scripts/build-kit.sh
-build_app "Opta" \
-  --binary opta \
-  --bundle .build/release/opta_opta.bundle
+build_app
