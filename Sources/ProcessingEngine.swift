@@ -130,7 +130,7 @@ final class ToolResolver {
 final class ProcessRunner {
     private let lock = NSLock()
     private var cancelled = false
-    private var currentProcess: Process?
+    private var currentProcesses: [Process] = []
 
     func prepareBatch() {
         lock.lock()
@@ -141,9 +141,9 @@ final class ProcessRunner {
     func cancel() {
         lock.lock()
         cancelled = true
-        let process = currentProcess
+        let processes = currentProcesses
         lock.unlock()
-        process?.terminate()
+        for process in processes { process.terminate() }
     }
 
     func isCancelled() -> Bool {
@@ -171,7 +171,7 @@ final class ProcessRunner {
                 let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
                 self?.lock.lock()
                 let wasCancelled = self?.cancelled ?? false
-                self?.currentProcess = nil
+                self?.currentProcesses.removeAll { $0 === process }
                 self?.lock.unlock()
 
                 guard !wasCancelled, process.terminationStatus == 0 else {
@@ -191,14 +191,14 @@ final class ProcessRunner {
             }
 
             self.lock.lock()
-            self.currentProcess = process
+            self.currentProcesses.append(process)
             self.lock.unlock()
 
             do {
                 try process.run()
             } catch {
                 self.lock.lock()
-                self.currentProcess = nil
+                self.currentProcesses.removeAll { $0 === process }
                 self.lock.unlock()
                 continuation.resume(throwing: error)
             }
@@ -264,24 +264,20 @@ final class ProcessingEngine: ObservableObject {
     private func runBatch(job: ProcessingJob, files: [FileItem]) async {
         runner.prepareBatch()
         let startTime = Date()
+        let maxParallel = max(1, ProcessInfo.processInfo.activeProcessorCount - 1)
 
-        for file in files {
-            if runner.isCancelled() {
-                break
+        await withTaskGroup(of: Void.self) { group in
+            var index = 0
+            while index < min(maxParallel, files.count) {
+                let file = files[index]
+                index += 1
+                group.addTask { [weak self] in await self?.processFile(job: job, file: file) }
             }
-
-            file.status = .working
-
-            do {
-                let outputURL = try await process(job: job, file: file)
-                let beforeKB = file.originalSize / 1024
-                let afterSize = (try? FileManager.default.attributesOfItem(atPath: outputURL.path(percentEncoded: false))[.size] as? Int64) ?? 0
-                let afterKB = afterSize / 1024
-                file.status = .done(beforeKB: beforeKB, afterKB: afterKB)
-            } catch is CancellationError {
-                file.status = nil
-            } catch {
-                file.status = .error(error.localizedDescription)
+            for await _ in group {
+                guard index < files.count, !runner.isCancelled() else { break }
+                let file = files[index]
+                index += 1
+                group.addTask { [weak self] in await self?.processFile(job: job, file: file) }
             }
         }
 
@@ -308,6 +304,21 @@ final class ProcessingEngine: ObservableObject {
         case .audio(let audioJob):
             let trackIndex = file.audioTracks.count > 1 ? file.selectedAudioTrack : nil
             return try await processAudio(url: file.url, job: audioJob, audioStreamIndex: trackIndex)
+        }
+    }
+
+    private func processFile(job: ProcessingJob, file: FileItem) async {
+        file.status = .working
+        do {
+            let outputURL = try await process(job: job, file: file)
+            let beforeKB = file.originalSize / 1024
+            let afterSize = (try? FileManager.default.attributesOfItem(atPath: outputURL.path(percentEncoded: false))[.size] as? Int64) ?? 0
+            let afterKB = afterSize / 1024
+            file.status = .done(beforeKB: beforeKB, afterKB: afterKB)
+        } catch is CancellationError {
+            file.status = nil
+        } catch {
+            file.status = .error(error.localizedDescription)
         }
     }
 
