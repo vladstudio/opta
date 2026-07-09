@@ -96,6 +96,9 @@ struct ContentView: View {
         List(selection: $model.selection) {
             ForEach(model.currentFiles) { file in
                 FileRowView(file: file)
+                    .simultaneousGesture(TapGesture(count: 2).onEnded {
+                        NSWorkspace.shared.activateFileViewerSelecting([file.url])
+                    })
                     .contextMenu {
                         Button("Reveal in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([file.url])
@@ -167,8 +170,9 @@ struct ContentView: View {
     private var imageControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Button("Add Files...") { addFiles() }
+                Button("+") { addFiles() }
                 Button("Screenshot...") { takeScreenshot() }
+                    .keyboardShortcut("s", modifiers: .command)
                     .disabled(screenshotter.isCapturing || recorder.isActive)
                 Spacer()
                 Picker("Format", selection: $model.settings.imageFormat) {
@@ -204,8 +208,9 @@ struct ContentView: View {
     private var videoControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Button("Add Files...") { addFiles() }
+                Button("+") { addFiles() }
                 Button(recorder.isRecording ? "Stop Recording" : "Record Screen...") { recordScreen() }
+                    .keyboardShortcut("s", modifiers: .command)
                     .disabled(screenshotter.isCapturing)
                 Spacer()
                 Picker("Format", selection: $model.settings.videoFormat) {
@@ -280,7 +285,7 @@ struct ContentView: View {
     private var audioControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Button("Add Files...") { addFiles() }
+                Button("+") { addFiles() }
                 Spacer()
                 Picker("Format", selection: $model.settings.audioFormat) {
                     ForEach(AudioOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
@@ -439,9 +444,11 @@ struct FileRowView: View {
             Image(nsImage: file.icon)
                 .resizable()
                 .frame(width: 20, height: 20)
+                .allowsHitTesting(false)
             Text(file.filename)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .allowsHitTesting(false)
             Spacer()
             if file.audioTracks.count > 1 {
                 Picker("", selection: $file.selectedAudioTrack) {
@@ -463,10 +470,12 @@ struct FileRowView: View {
             Text("\(file.originalSize / 1024) KB")
                 .foregroundStyle(.secondary)
                 .font(.caption)
+                .allowsHitTesting(false)
         case .waiting:
             Image(systemName: "clock")
                 .foregroundStyle(.secondary)
                 .font(.caption)
+                .allowsHitTesting(false)
         case .working:
             ProgressView()
                 .controlSize(.small)
@@ -475,11 +484,13 @@ struct FileRowView: View {
             Text(before > 0 ? "\(pct)%" : "done")
                 .foregroundStyle(pct > 100 ? .orange : .green)
                 .font(.caption)
+                .allowsHitTesting(false)
         case .error(let message):
             Text(message)
                 .foregroundStyle(.red)
                 .font(.caption)
                 .lineLimit(1)
+                .allowsHitTesting(false)
         }
     }
 }
