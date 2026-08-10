@@ -100,44 +100,53 @@ struct ContentView: View {
                         NSWorkspace.shared.activateFileViewerSelecting([file.url])
                     })
                     .contextMenu {
-                        Button("Optimize") {
-                            optimize(files: [file])
-                        }
-                        .disabled(engine.isProcessing)
-                        Button("Reveal Original in Finder") {
-                            NSWorkspace.shared.activateFileViewerSelecting([file.url])
-                        }
-                        .disabled(!FileManager.default.fileExists(atPath: file.url.path))
-                        Button("Reveal Optimized in Finder") {
-                            revealOptimized(for: file)
-                        }
-                        .keyboardShortcut("f", modifiers: .command)
-                        .disabled(!anyOptimizedExists(for: file))
-                        Button("Move Original to Trash") {
-                            if model.selection.contains(file.id) {
-                                model.trashSelected()
-                            } else {
-                                model.trashFile(file, from: model.settings.selectedTab, isProcessing: engine.isProcessing)
+                        Section("Original") {
+                            Button("Optimize") {
+                                optimize(files: [file])
                             }
-                        }
-                        .keyboardShortcut(.delete, modifiers: .command)
-                        .disabled(engine.isProcessing || !FileManager.default.fileExists(atPath: file.url.path))
-                        Button("Move Optimized to Trash") {
-                            for f in optimizedTargets(for: file) where optimizedFileExists(f) {
-                                try? FileManager.default.trashItem(at: f.outputURL!, resultingItemURL: nil)
-                                f.outputURL = nil
+                            .disabled(engine.isProcessing)
+                            Button("Reveal in Finder") {
+                                NSWorkspace.shared.activateFileViewerSelecting([file.url])
                             }
-                        }
-                        .disabled(engine.isProcessing || !anyOptimizedExists(for: file))
-                        Button("Remove from List") {
-                            if model.selection.contains(file.id) {
-                                model.removeSelected(from: model.settings.selectedTab, isProcessing: engine.isProcessing)
-                            } else {
-                                model.removeFile(file, from: model.settings.selectedTab, isProcessing: engine.isProcessing)
+                            .disabled(!FileManager.default.fileExists(atPath: file.url.path))
+                            Button("Move to Trash") {
+                                if model.selection.contains(file.id) {
+                                    model.trashSelected()
+                                } else {
+                                    model.trashFile(file, from: model.settings.selectedTab, isProcessing: engine.isProcessing)
+                                }
                             }
+                            .keyboardShortcut(.delete, modifiers: .command)
+                            .disabled(engine.isProcessing || !FileManager.default.fileExists(atPath: file.url.path))
+                            Button("Remove from List") {
+                                if model.selection.contains(file.id) {
+                                    model.removeSelected(from: model.settings.selectedTab, isProcessing: engine.isProcessing)
+                                } else {
+                                    model.removeFile(file, from: model.settings.selectedTab, isProcessing: engine.isProcessing)
+                                }
+                            }
+                            .keyboardShortcut(.delete, modifiers: [])
+                            .disabled(engine.isProcessing)
                         }
-                        .keyboardShortcut(.delete)
-                        .disabled(engine.isProcessing)
+                        Section("Optimized") {
+                            Button("Reveal in Finder") {
+                                revealOptimized(for: file)
+                            }
+                            .keyboardShortcut("f", modifiers: .command)
+                            .disabled(!anyOptimizedExists(for: file))
+                            Button("Copy to Clipboard") {
+                                copyOptimizedToClipboard(for: file)
+                            }
+                            .keyboardShortcut("c", modifiers: .command)
+                            .disabled(!anyOptimizedExists(for: file))
+                            Button("Move to Trash") {
+                                for f in optimizedTargets(for: file) where optimizedFileExists(f) {
+                                    try? FileManager.default.trashItem(at: f.outputURL!, resultingItemURL: nil)
+                                    f.outputURL = nil
+                                }
+                            }
+                            .disabled(engine.isProcessing || !anyOptimizedExists(for: file))
+                        }
                     }
             }
         }
@@ -301,6 +310,15 @@ struct ContentView: View {
         if !urls.isEmpty {
             NSWorkspace.shared.activateFileViewerSelecting(urls)
         }
+    }
+
+    private func copyOptimizedToClipboard(for file: FileItem) {
+        let urls = optimizedTargets(for: file).compactMap { $0.outputURL }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !urls.isEmpty else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects(urls as [NSPasteboardWriting])
     }
 
     private func crfHint(_ crf: Int) -> String {
