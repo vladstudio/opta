@@ -100,24 +100,43 @@ struct ContentView: View {
                         NSWorkspace.shared.activateFileViewerSelecting([file.url])
                     })
                     .contextMenu {
-                        Button("Reveal in Finder") {
-                            NSWorkspace.shared.activateFileViewerSelecting([file.url])
-                        }
-                        Button("Remove from List  ⌫") {
-                            if model.selection.contains(file.id) {
-                                model.removeSelected(from: model.settings.selectedTab, isProcessing: engine.isProcessing)
-                            } else {
-                                model.removeFile(file, from: model.settings.selectedTab, isProcessing: engine.isProcessing)
-                            }
+                        Button("Optimize") {
+                            optimize(files: [file])
                         }
                         .disabled(engine.isProcessing)
-                        Button("Move to Trash  ⌘⌫") {
+                        Button("Reveal Original in Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([file.url])
+                        }
+                        .disabled(!FileManager.default.fileExists(atPath: file.url.path))
+                        Button("Reveal Optimized in Finder") {
+                            revealOptimized(for: file)
+                        }
+                        .keyboardShortcut("f", modifiers: .command)
+                        .disabled(!anyOptimizedExists(for: file))
+                        Button("Move Original to Trash") {
                             if model.selection.contains(file.id) {
                                 model.trashSelected()
                             } else {
                                 model.trashFile(file, from: model.settings.selectedTab, isProcessing: engine.isProcessing)
                             }
                         }
+                        .keyboardShortcut(.delete, modifiers: .command)
+                        .disabled(engine.isProcessing || !FileManager.default.fileExists(atPath: file.url.path))
+                        Button("Move Optimized to Trash") {
+                            for f in optimizedTargets(for: file) where optimizedFileExists(f) {
+                                try? FileManager.default.trashItem(at: f.outputURL!, resultingItemURL: nil)
+                                f.outputURL = nil
+                            }
+                        }
+                        .disabled(engine.isProcessing || !anyOptimizedExists(for: file))
+                        Button("Remove from List") {
+                            if model.selection.contains(file.id) {
+                                model.removeSelected(from: model.settings.selectedTab, isProcessing: engine.isProcessing)
+                            } else {
+                                model.removeFile(file, from: model.settings.selectedTab, isProcessing: engine.isProcessing)
+                            }
+                        }
+                        .keyboardShortcut(.delete)
                         .disabled(engine.isProcessing)
                     }
             }
@@ -258,6 +277,30 @@ struct ContentView: View {
             optimizeButton(disabled: model.queues.video.isEmpty)
         }
         .padding()
+    }
+
+    private func optimizedFileExists(_ file: FileItem) -> Bool {
+        guard let out = file.outputURL else { return false }
+        return FileManager.default.fileExists(atPath: out.path)
+    }
+
+    private func optimizedTargets(for file: FileItem) -> [FileItem] {
+        if model.selection.contains(file.id) && !model.selection.isEmpty {
+            return model.currentFiles.filter { model.selection.contains($0.id) }
+        }
+        return [file]
+    }
+
+    private func anyOptimizedExists(for file: FileItem) -> Bool {
+        optimizedTargets(for: file).contains { optimizedFileExists($0) }
+    }
+
+    private func revealOptimized(for file: FileItem) {
+        let urls = optimizedTargets(for: file).compactMap { $0.outputURL }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        if !urls.isEmpty {
+            NSWorkspace.shared.activateFileViewerSelecting(urls)
+        }
     }
 
     private func crfHint(_ crf: Int) -> String {
@@ -402,21 +445,26 @@ struct ContentView: View {
 
     private func optimize() {
         guard let request = model.optimizationRequest() else { return }
+        optimize(files: request.files)
+    }
+
+    private func optimize(files: [FileItem]) {
+        guard let request = model.optimizationRequest() else { return }
         if let message = engine.checkTools(for: request.job) {
             model.presentError(message)
             return
         }
-        let (safe, conflicting) = splitConflicts(files: request.files, job: request.job)
+        let (safe, conflicting) = splitConflicts(files: files, job: request.job)
         guard conflicting.isEmpty else {
             pendingOverwrite = (job: request.job, safe: safe, conflicting: conflicting)
             let n = conflicting.count
-            let total = request.files.count
+            let total = files.count
             let noun = n == 1 ? "file" : "files"
             model.overwriteAlertMessage = "\(n) of \(total) \(noun) would overwrite its original.\n\n• Add Suffix — optimize the safe files now; skip the rest.\n• Replace Originals — optimize all, overwriting the conflicting originals."
             model.showOverwriteAlert = true
             return
         }
-        engine.start(job: request.job, files: request.files)
+        engine.start(job: request.job, files: files)
     }
 
     private func splitConflicts(files: [FileItem], job: ProcessingJob) -> (safe: [FileItem], conflicting: [FileItem]) {

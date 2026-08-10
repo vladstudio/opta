@@ -314,10 +314,12 @@ final class ProcessingEngine: ObservableObject {
             let beforeKB = file.originalSize / 1024
             let afterSize = (try? FileManager.default.attributesOfItem(atPath: outputURL.path(percentEncoded: false))[.size] as? Int64) ?? 0
             let afterKB = afterSize / 1024
+            file.outputURL = outputURL
             file.status = .done(beforeKB: beforeKB, afterKB: afterKB)
         } catch is CancellationError {
             file.status = nil
         } catch {
+            file.outputURL = nil
             file.status = .error(error.localizedDescription)
         }
     }

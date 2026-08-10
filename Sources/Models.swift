@@ -191,6 +191,7 @@ class FileItem: Identifiable, ObservableObject {
     let url: URL
     let originalSize: Int64
     @Published var status: FileStatus?
+    @Published var outputURL: URL?
     @Published var audioTracks: [AudioTrack] = []
     @Published var selectedAudioTrack: Int = 0
 
