@@ -66,9 +66,7 @@ final class WorkspaceModel: ObservableObject {
     func ingestPendingURLs(_ urls: [URL], probeAudioTracks: (FileItem) -> Void) {
         guard !urls.isEmpty else { return }
         let wasEmpty = queues.isEmpty
-        for url in urls {
-            addFile(url, preferredTab: .auto, probeAudioTracks: probeAudioTracks)
-        }
+        addAndSelect(urls, preferredTab: .auto, probeAudioTracks: probeAudioTracks)
         guard wasEmpty else { return }
         if !queues.images.isEmpty { settings.selectedTab = .images }
         else if !queues.video.isEmpty { settings.selectedTab = .video }
@@ -154,10 +152,10 @@ final class WorkspaceModel: ObservableObject {
         currentFiles.filter { selection.contains($0.id) }.map(\.url)
     }
 
-    func addFile(_ url: URL, preferredTab: FileDestination, probeAudioTracks: (FileItem) -> Void) {
+    func addFile(_ url: URL, preferredTab: FileDestination, probeAudioTracks: (FileItem) -> Void) -> FileItem? {
         let normalized = url.standardizedFileURL
-        guard let targetTab = destinationTab(for: normalized, destination: preferredTab) else { return }
-        guard !queues[targetTab].contains(where: { $0.url.standardizedFileURL == normalized }) else { return }
+        guard let targetTab = destinationTab(for: normalized, destination: preferredTab) else { return nil }
+        guard !queues[targetTab].contains(where: { $0.url.standardizedFileURL == normalized }) else { return nil }
 
         let item = FileItem(url: normalized)
         updateFiles(for: targetTab) { files in
@@ -166,6 +164,17 @@ final class WorkspaceModel: ObservableObject {
         if targetTab == .audio && item.isVideoSource {
             probeAudioTracks(item)
         }
+        return item
+    }
+
+    func addAndSelect(_ urls: [URL], preferredTab: FileDestination, probeAudioTracks: (FileItem) -> Void) {
+        var ids: Set<FileItem.ID> = []
+        for url in urls {
+            if let item = addFile(url, preferredTab: preferredTab, probeAudioTracks: probeAudioTracks) {
+                ids.insert(item.id)
+            }
+        }
+        if !ids.isEmpty { selection = ids }
     }
 
     func destinationForCurrentTab() -> FileDestination {
@@ -176,15 +185,19 @@ final class WorkspaceModel: ObservableObject {
         if let firstTab = urls.compactMap({ destinationTab(for: $0.standardizedFileURL, destination: destination) }).first {
             settings.selectedTab = firstTab
         }
-        for url in urls {
-            addFile(url, preferredTab: destination, probeAudioTracks: probeAudioTracks)
-        }
+        addAndSelect(urls, preferredTab: destination, probeAudioTracks: probeAudioTracks)
     }
 
     func optimizationRequest() -> (job: ProcessingJob, files: [FileItem])? {
+        func resolvedFiles(_ queue: [FileItem]) -> [FileItem] {
+            let selected = queue.filter { selection.contains($0.id) }
+            return selected.isEmpty ? queue : selected
+        }
+
         switch settings.selectedTab {
         case .images:
-            guard !queues.images.isEmpty else { return nil }
+            let files = resolvedFiles(queues.images)
+            guard !files.isEmpty else { return nil }
             return (
                 .images(ImageJob(
                     format: settings.imageFormat,
@@ -194,10 +207,11 @@ final class WorkspaceModel: ObservableObject {
                     quality: Int(settings.imageQuality),
                     oxipngLevel: 6
                 )),
-                queues.images
+                files
             )
         case .video:
-            guard !queues.video.isEmpty else { return nil }
+            let files = resolvedFiles(queues.video)
+            guard !files.isEmpty else { return nil }
             return (
                 .video(VideoJob(
                     format: settings.videoFormat,
@@ -207,10 +221,11 @@ final class WorkspaceModel: ObservableObject {
                     crf: Int(settings.videoCRF),
                     audioBitrate: settings.videoAudioBitrate
                 )),
-                queues.video
+                files
             )
         case .audio:
-            guard !queues.audio.isEmpty else { return nil }
+            let files = resolvedFiles(queues.audio)
+            guard !files.isEmpty else { return nil }
             return (
                 .audio(AudioJob(
                     format: settings.audioFormat,
@@ -218,7 +233,7 @@ final class WorkspaceModel: ObservableObject {
                     stripMetadata: settings.audioStripMetadata,
                     bitrate: settings.audioBitrate
                 )),
-                queues.audio
+                files
             )
         }
     }

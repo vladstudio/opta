@@ -403,9 +403,7 @@ struct ContentView: View {
 
         guard panel.runModal() == .OK else { return }
         let destination = model.destinationForCurrentTab()
-        for url in panel.urls {
-            model.addFile(url, preferredTab: destination, probeAudioTracks: engine.probeAudioTracks)
-        }
+        model.addAndSelect(panel.urls, preferredTab: destination, probeAudioTracks: engine.probeAudioTracks)
     }
 
     private func recordScreen() {
@@ -417,7 +415,7 @@ struct ContentView: View {
         recorder.start(
             onFinish: { url in
                 model.settings.selectedTab = .video
-                model.addFile(url, preferredTab: .auto, probeAudioTracks: engine.probeAudioTracks)
+                model.addAndSelect([url], preferredTab: .auto, probeAudioTracks: engine.probeAudioTracks)
             },
             onError: { message in
                 model.presentError(message)
@@ -429,7 +427,7 @@ struct ContentView: View {
         screenshotter.start(
             onFinish: { url in
                 model.settings.selectedTab = .images
-                model.addFile(url, preferredTab: .auto, probeAudioTracks: engine.probeAudioTracks)
+                model.addAndSelect([url], preferredTab: .auto, probeAudioTracks: engine.probeAudioTracks)
             },
             onError: { message in
                 model.presentError(message)
