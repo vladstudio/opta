@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct Settings: Codable {
@@ -83,7 +84,40 @@ final class WorkspaceModel: ObservableObject {
         case .trashSelection:
             guard !isProcessing, !selection.isEmpty else { return }
             trashSelected()
+        case .revealOptimized:
+            revealOptimized()
+        case .copyOptimized:
+            copyOptimized()
         }
+    }
+
+    func revealOptimized() {
+        let targets: [FileItem]
+        if selection.isEmpty {
+            targets = currentFiles
+        } else {
+            targets = currentFiles.filter { selection.contains($0.id) }
+        }
+        let urls = targets.compactMap { $0.outputURL }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        if !urls.isEmpty {
+            NSWorkspace.shared.activateFileViewerSelecting(urls)
+        }
+    }
+
+    func copyOptimized() {
+        let targets: [FileItem]
+        if selection.isEmpty {
+            targets = currentFiles
+        } else {
+            targets = currentFiles.filter { selection.contains($0.id) }
+        }
+        let urls = targets.compactMap { $0.outputURL }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !urls.isEmpty else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects(urls as [NSPasteboardWriting])
     }
 
     func hasUnprocessedFiles(for tab: MediaTab) -> Bool {

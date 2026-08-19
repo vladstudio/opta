@@ -6,6 +6,8 @@ enum AppCommand {
     case selectTab(MediaTab)
     case previewSelection
     case trashSelection
+    case revealOptimized
+    case copyOptimized
 }
 
 class AppState: ObservableObject {
@@ -94,6 +96,16 @@ struct OptaApp: App {
                     appDelegate.appState.send(.trashSelection)
                 }
                 .keyboardShortcut(.delete, modifiers: .command)
+
+                Button("Reveal Optimized in Finder") {
+                    appDelegate.appState.send(.revealOptimized)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+
+                Button("Copy Optimized to Clipboard") {
+                    appDelegate.appState.send(.copyOptimized)
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
             }
         }
     }
