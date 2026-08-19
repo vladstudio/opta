@@ -132,12 +132,12 @@ struct ContentView: View {
                             Button("Reveal in Finder") {
                                 revealOptimized(for: file)
                             }
-                            .keyboardShortcut("f", modifiers: .command)
+                            .keyboardShortcut("f", modifiers: [.command, .shift])
                             .disabled(!anyOptimizedExists(for: file))
                             Button("Copy to Clipboard") {
                                 copyOptimizedToClipboard(for: file)
                             }
-                            .keyboardShortcut("c", modifiers: .command)
+                            .keyboardShortcut("c", modifiers: [.command, .shift])
                             .disabled(!anyOptimizedExists(for: file))
                             Button("Move to Trash") {
                                 for f in optimizedTargets(for: file) where optimizedFileExists(f) {
@@ -145,6 +145,7 @@ struct ContentView: View {
                                     f.outputURL = nil
                                 }
                             }
+                            .keyboardShortcut(.delete, modifiers: [.command, .shift])
                             .disabled(engine.isProcessing || !anyOptimizedExists(for: file))
                         }
                     }

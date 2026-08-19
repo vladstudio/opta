@@ -8,6 +8,7 @@ enum AppCommand {
     case trashSelection
     case revealOptimized
     case copyOptimized
+    case trashOptimized
 }
 
 class AppState: ObservableObject {
@@ -100,12 +101,17 @@ struct OptaApp: App {
                 Button("Reveal Optimized in Finder") {
                     appDelegate.appState.send(.revealOptimized)
                 }
-                .keyboardShortcut("f", modifiers: .command)
+                .keyboardShortcut("f", modifiers: [.command, .shift])
 
                 Button("Copy Optimized to Clipboard") {
                     appDelegate.appState.send(.copyOptimized)
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
+
+                Button("Move Optimized to Trash") {
+                    appDelegate.appState.send(.trashOptimized)
+                }
+                .keyboardShortcut(.delete, modifiers: [.command, .shift])
             }
         }
     }

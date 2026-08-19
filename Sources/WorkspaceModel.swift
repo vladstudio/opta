@@ -88,17 +88,17 @@ final class WorkspaceModel: ObservableObject {
             revealOptimized()
         case .copyOptimized:
             copyOptimized()
+        case .trashOptimized:
+            trashOptimized()
         }
     }
 
+    private var optimizedTargets: [FileItem] {
+        selection.isEmpty ? currentFiles : currentFiles.filter { selection.contains($0.id) }
+    }
+
     func revealOptimized() {
-        let targets: [FileItem]
-        if selection.isEmpty {
-            targets = currentFiles
-        } else {
-            targets = currentFiles.filter { selection.contains($0.id) }
-        }
-        let urls = targets.compactMap { $0.outputURL }
+        let urls = optimizedTargets.compactMap { $0.outputURL }
             .filter { FileManager.default.fileExists(atPath: $0.path) }
         if !urls.isEmpty {
             NSWorkspace.shared.activateFileViewerSelecting(urls)
@@ -106,18 +106,20 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func copyOptimized() {
-        let targets: [FileItem]
-        if selection.isEmpty {
-            targets = currentFiles
-        } else {
-            targets = currentFiles.filter { selection.contains($0.id) }
-        }
-        let urls = targets.compactMap { $0.outputURL }
+        let urls = optimizedTargets.compactMap { $0.outputURL }
             .filter { FileManager.default.fileExists(atPath: $0.path) }
         guard !urls.isEmpty else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects(urls as [NSPasteboardWriting])
+    }
+
+    func trashOptimized() {
+        for f in optimizedTargets where f.outputURL != nil
+            && FileManager.default.fileExists(atPath: f.outputURL!.path) {
+            try? FileManager.default.trashItem(at: f.outputURL!, resultingItemURL: nil)
+            f.outputURL = nil
+        }
     }
 
     func hasUnprocessedFiles(for tab: MediaTab) -> Bool {
