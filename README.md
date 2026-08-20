@@ -48,15 +48,13 @@ A simple macOS app to optimize images, video, and audio.
 
 Requires macOS 15 (Sequoia) or later and [Homebrew](https://brew.sh).
 
-1. Open **Terminal** (press ⌘Space, type "Terminal", press Enter)
-2. Copy and paste this command, then press Enter:
+1. Download [Opta.zip](https://github.com/vladstudio/opta/releases/latest/download/Opta.zip)
+2. Unzip and drag `Opta.app` to `/Applications`
+3. Install the CLI dependencies Opta shells out to:
 
-```sh
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/vladstudio/opta/main/install.sh)"
-```
-
-3. The app will install to /Applications and open automatically
-4. The installer will fetch the CLI dependencies (`pngquant`, `oxipng`, `webp`, `ffmpeg`) via Homebrew if they're missing
+   ```sh
+   brew install pngquant oxipng webp ffmpeg
+   ```
 
 ## Usage
 
