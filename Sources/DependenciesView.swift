@@ -24,6 +24,8 @@ final class DependenciesModel: ObservableObject {
     @Published var installLog = ""
 
     private let resolver = ToolResolver()
+    private var installProcess: Process?
+    private var installTask: Task<Void, Never>?
 
     func refresh() {
         resolver.clearCache()
@@ -43,28 +45,57 @@ final class DependenciesModel: ObservableObject {
 
         isInstalling = true
         installLog = ""
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: brew)
-        process.arguments = ["install"] + packages
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
 
-        Task { @MainActor in
+        installTask = Task.detached { [self, brew, packages] in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: brew)
+            process.arguments = ["install"] + packages
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            await MainActor.run { self.installProcess = process }
+
             do {
                 try process.run()
-                process.waitUntilExit()
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                installLog = String(data: data, encoding: .utf8) ?? ""
-                if process.terminationStatus != 0, installLog.isEmpty {
-                    installLog = "Homebrew exited with status \(process.terminationStatus)."
-                }
             } catch {
-                installLog = "Install failed: \(error.localizedDescription)"
+                await MainActor.run {
+                    self.installLog = "Install failed: \(error.localizedDescription)"
+                    self.finishInstall()
+                }
+                return
             }
-            refresh()
-            isInstalling = false
+
+            let handle = pipe.fileHandleForReading
+            while !Task.isCancelled {
+                let chunk = handle.availableData
+                if chunk.isEmpty { break }
+                if let text = String(data: chunk, encoding: .utf8), !text.isEmpty {
+                    await MainActor.run { self.installLog += text }
+                }
+            }
+            if Task.isCancelled { process.terminate() }
+            process.waitUntilExit()
+            let status = process.terminationStatus
+
+            await MainActor.run {
+                if status != 0, self.installLog.isEmpty {
+                    self.installLog = "Homebrew exited with status \(status)."
+                }
+                self.finishInstall()
+            }
         }
+    }
+
+    func cancelInstall() {
+        installTask?.cancel()
+        installProcess?.terminate()
+    }
+
+    private func finishInstall() {
+        refresh()
+        isInstalling = false
+        installProcess = nil
+        installTask = nil
     }
 
     func openBrewSite() {
@@ -107,22 +138,33 @@ struct DependenciesView: View {
                 }
             }
 
-            if model.homebrewInstalled, !model.missingTools.isEmpty {
+            if model.homebrewInstalled && (!model.missingTools.isEmpty || model.isInstalling) {
                 let n = model.missingTools.count
-                Text("\(n) missing tool\(n == 1 ? "" : "s"). Install via Homebrew to enable \(n == 1 ? "this format" : "these formats").")
-                Button {
-                    model.installMissing()
-                } label: {
-                    if model.isInstalling {
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.small)
-                            Text("Installing…")
+                if n > 0 {
+                    Text("\(n) missing tool\(n == 1 ? "" : "s"). Install via Homebrew to enable \(n == 1 ? "this format" : "these formats").")
+                } else {
+                    Text("Installing…")
+                }
+                HStack {
+                    Button {
+                        model.installMissing()
+                    } label: {
+                        if model.isInstalling {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text("Installing…")
+                            }
+                        } else {
+                            Text("Install Missing Tools")
                         }
-                    } else {
-                        Text("Install Missing Tools")
+                    }
+                    .disabled(model.isInstalling)
+                    if model.isInstalling {
+                        Button("Cancel", role: .destructive) {
+                            model.cancelInstall()
+                        }
                     }
                 }
-                .disabled(model.isInstalling)
             }
 
             if model.allInstalled {
@@ -131,11 +173,15 @@ struct DependenciesView: View {
             }
 
             if !model.installLog.isEmpty {
-                Text(model.installLog)
-                    .font(.system(.caption, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                ScrollView {
+                    Text(model.installLog)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .frame(maxHeight: 140)
+                .padding(8)
+                .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
             }
 
             Spacer()
