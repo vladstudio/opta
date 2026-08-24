@@ -116,8 +116,27 @@ final class ToolResolver {
         return resolved
     }
 
+    func clearCache() {
+        lock.lock()
+        cachedPaths.removeAll()
+        lock.unlock()
+    }
+
     private func findTool(named name: String) -> String? {
-        for directory in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] {
+        var seen = Set<String>()
+        if let pathEnv = ProcessInfo.processInfo.environment["PATH"] {
+            for directory in pathEnv.split(separator: ":").map(String.init) {
+                guard !seen.contains(directory) else { continue }
+                seen.insert(directory)
+                let path = "\(directory)/\(name)"
+                if FileManager.default.isExecutableFile(atPath: path) {
+                    return path
+                }
+            }
+        }
+        // Fallbacks for unusual launch environments (LaunchAgent shims, etc.).
+        for directory in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/opt/local/bin"] {
+            guard !seen.contains(directory) else { continue }
             let path = "\(directory)/\(name)"
             if FileManager.default.isExecutableFile(atPath: path) {
                 return path
@@ -213,19 +232,8 @@ final class ProcessingEngine: ObservableObject {
     private let tools = ToolResolver()
     private let runner = ProcessRunner()
 
-    func checkTools(for job: ProcessingJob) -> String? {
-        let missing = tools.missingTools(for: job)
-        guard !missing.isEmpty else {
-            return nil
-        }
-
-        switch job {
-        case .images:
-            let brewPackages = missing.map { $0 == "cwebp" ? "webp" : $0 }
-            return "Missing tools: \(missing.joined(separator: ", "))\n\nInstall with:\nbrew install \(brewPackages.joined(separator: " "))"
-        case .video, .audio:
-            return "Missing tools: ffmpeg\n\nInstall with:\nbrew install ffmpeg"
-        }
+    func missingTools(for job: ProcessingJob) -> [String] {
+        tools.missingTools(for: job)
     }
 
     func cancel() {

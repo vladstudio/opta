@@ -45,6 +45,8 @@ final class WorkspaceModel: ObservableObject {
     @Published var alertMessage = ""
     @Published var showOverwriteAlert = false
     @Published var overwriteAlertMessage = ""
+    @Published var showDependenciesSheet = false
+    let dependenciesModel = DependenciesModel()
 
     private var saveWorkItem: DispatchWorkItem?
 
@@ -90,6 +92,9 @@ final class WorkspaceModel: ObservableObject {
             copyOptimized()
         case .trashOptimized:
             trashOptimized()
+        case .openDependencies:
+            dependenciesModel.refresh()
+            showDependenciesSheet = true
         }
     }
 

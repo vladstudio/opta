@@ -9,6 +9,7 @@ enum AppCommand {
     case revealOptimized
     case copyOptimized
     case trashOptimized
+    case openDependencies
 }
 
 class AppState: ObservableObject {
@@ -112,6 +113,12 @@ struct OptaApp: App {
                     appDelegate.appState.send(.trashOptimized)
                 }
                 .keyboardShortcut(.delete, modifiers: [.command, .shift])
+            }
+            CommandMenu("Tools") {
+                Button("Check Dependencies…") {
+                    appDelegate.appState.send(.openDependencies)
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
             }
         }
     }

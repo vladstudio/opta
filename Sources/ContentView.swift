@@ -30,6 +30,12 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 480, maxWidth: 480, minHeight: 450)
+        .onAppear {
+            model.dependenciesModel.refresh()
+            if !model.dependenciesModel.allInstalled {
+                model.showDependenciesSheet = true
+            }
+        }
         .onChange(of: appState.pendingURLs) {
             guard !appState.pendingURLs.isEmpty else { return }
             model.ingestPendingURLs(appState.pendingURLs, probeAudioTracks: engine.probeAudioTracks)
@@ -50,6 +56,9 @@ struct ContentView: View {
             Button("OK") {}
         } message: {
             Text(model.alertMessage)
+        }
+        .sheet(isPresented: $model.showDependenciesSheet) {
+            DependenciesView(model: model.dependenciesModel)
         }
         .alert("Replace original files?", isPresented: $model.showOverwriteAlert) {
             Button("Cancel", role: .cancel) {
@@ -467,8 +476,8 @@ struct ContentView: View {
 
     private func optimize(files: [FileItem]) {
         guard let request = model.optimizationRequest() else { return }
-        if let message = engine.checkTools(for: request.job) {
-            model.presentError(message)
+        if !engine.missingTools(for: request.job).isEmpty {
+            model.showDependenciesSheet = true
             return
         }
         let (safe, conflicting) = splitConflicts(files: files, job: request.job)
