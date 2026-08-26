@@ -13,15 +13,17 @@ final class ScreenshotCapturer: NSObject, ObservableObject, SCContentSharingPick
 
     private var onFinish: ((URL) -> Void)?
     private var onError: ((String) -> Void)?
+    private var folder: String?
 
     private enum State { case idle, picking, capturing }
     private enum WriteError: LocalizedError {
         case create, finalize
-        var errorDescription: String? { "Failed to write screenshot to Desktop" }
+        var errorDescription: String? { "Failed to write screenshot" }
     }
 
-    func start(onFinish: @escaping (URL) -> Void, onError: @escaping (String) -> Void) {
+    func start(folder: String?, onFinish: @escaping (URL) -> Void, onError: @escaping (String) -> Void) {
         guard case .idle = state else { return }
+        self.folder = folder
         self.onFinish = onFinish
         self.onError = onError
         state = .picking
@@ -91,10 +93,11 @@ final class ScreenshotCapturer: NSObject, ObservableObject, SCContentSharingPick
         state = .idle
         onFinish = nil
         onError = nil
+        folder = nil
     }
 
     private func write(_ image: CGImage) throws -> URL {
-        let url = desktopCaptureURL(prefix: "Screenshot", ext: "png")
+        let url = captureURL(folder: folder, prefix: "Screenshot", ext: "png")
         guard let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else { throw WriteError.create }
         CGImageDestinationAddImage(dest, image, nil)
         guard CGImageDestinationFinalize(dest) else { throw WriteError.finalize }

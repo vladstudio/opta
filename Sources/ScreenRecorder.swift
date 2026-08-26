@@ -20,6 +20,7 @@ final class ScreenRecorder: NSObject, ObservableObject, SCContentSharingPickerOb
     private var hiddenWindow: NSWindow?
     private var onFinish: ((URL) -> Void)?
     private var onError: ((String) -> Void)?
+    private var folder: String?
 
     private enum State {
         case idle
@@ -33,8 +34,9 @@ final class ScreenRecorder: NSObject, ObservableObject, SCContentSharingPickerOb
         let url: URL
     }
 
-    func start(onFinish: @escaping (URL) -> Void, onError: @escaping (String) -> Void) {
+    func start(folder: String?, onFinish: @escaping (URL) -> Void, onError: @escaping (String) -> Void) {
         guard case .idle = state else { return }
+        self.folder = folder
         self.onFinish = onFinish
         self.onError = onError
         state = .picking
@@ -104,7 +106,7 @@ final class ScreenRecorder: NSObject, ObservableObject, SCContentSharingPickerOb
     }
 
     private func beginCapture(filter: SCContentFilter) async {
-        let url = desktopCaptureURL(prefix: "Screen Recording", ext: "mov")
+        let url = captureURL(folder: folder, prefix: "Screen Recording", ext: "mov")
 
         let streamConfig = SCStreamConfiguration()
         let scale = CGFloat(filter.pointPixelScale)

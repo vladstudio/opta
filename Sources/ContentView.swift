@@ -212,6 +212,9 @@ struct ContentView: View {
                 Button("Screenshot...") { takeScreenshot() }
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(screenshotter.isCapturing || recorder.isActive)
+                captureFolderButton(current: model.settings.screenshotFolder) {
+                    model.settings.screenshotFolder = $0
+                }
                 Spacer()
                 Picker("Format", selection: $model.settings.imageFormat) {
                     ForEach(ImageOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
@@ -250,6 +253,9 @@ struct ContentView: View {
                 Button(recorder.isRecording ? "Stop Recording" : "Record Screen...") { recordScreen() }
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(screenshotter.isCapturing)
+                captureFolderButton(current: model.settings.recordingFolder) {
+                    model.settings.recordingFolder = $0
+                }
                 Spacer()
                 Picker("Format", selection: $model.settings.videoFormat) {
                     ForEach(VideoOutputFormat.allCases, id: \.self) { Text($0.rawValue) }
@@ -398,6 +404,25 @@ struct ContentView: View {
         }
     }
 
+    private func captureFolderButton(current: String?, onSelect: @escaping (String?) -> Void) -> some View {
+        Button {
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.prompt = "Save Here"
+            if let path = current, !path.isEmpty {
+                panel.directoryURL = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+            }
+            if panel.runModal() == .OK, let url = panel.url {
+                onSelect(url.path)
+            }
+        } label: {
+            Image(systemName: "folder")
+        }
+        .help(current.map { "Capture to: \($0)" } ?? "Capture to: Desktop")
+    }
+
     private func addFiles() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
@@ -423,6 +448,7 @@ struct ContentView: View {
         }
 
         recorder.start(
+            folder: model.settings.recordingFolder,
             onFinish: { url in
                 model.settings.selectedTab = .video
                 model.addAndSelect([url], preferredTab: .auto, probeAudioTracks: engine.probeAudioTracks)
@@ -435,6 +461,7 @@ struct ContentView: View {
 
     private func takeScreenshot() {
         screenshotter.start(
+            folder: model.settings.screenshotFolder,
             onFinish: { url in
                 model.settings.selectedTab = .images
                 model.addAndSelect([url], preferredTab: .auto, probeAudioTracks: engine.probeAudioTracks)

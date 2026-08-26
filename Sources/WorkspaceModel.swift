@@ -19,8 +19,12 @@ struct Settings: Codable {
     var audioStripMetadata = true
     var audioBitrate = AudioOutputFormat.mp3.bitrateDefault
 
+    // Capture destinations; nil = Desktop.
+    var screenshotFolder: String?
+    var recordingFolder: String?
+
     // Bump the suffix on any schema-breaking change; prior values reset to defaults.
-    private static let storageKey = "WorkspaceSettings.v2"
+    private static let storageKey = "WorkspaceSettings.v3"
 
     static func load() -> Settings {
         guard
