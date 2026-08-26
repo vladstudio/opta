@@ -61,8 +61,11 @@ struct ContentView: View {
             DependenciesView(model: model.dependenciesModel)
         }
         .alert("Replace original files?", isPresented: $model.showOverwriteAlert) {
-            Button("Cancel", role: .cancel) {
+            Button("Replace Originals", role: .destructive) {
+                let p = pendingOverwrite
                 pendingOverwrite = nil
+                guard let p else { return }
+                engine.start(job: p.job, files: p.safe + p.conflicting)
             }
             Button("Add Suffix") {
                 let p = pendingOverwrite
@@ -75,11 +78,8 @@ struct ContentView: View {
                     engine.start(job: p.job, files: p.safe)
                 }
             }
-            Button("Replace Originals", role: .destructive) {
-                let p = pendingOverwrite
+            Button("Cancel", role: .cancel) {
                 pendingOverwrite = nil
-                guard let p else { return }
-                engine.start(job: p.job, files: p.safe + p.conflicting)
             }
         } message: {
             Text(model.overwriteAlertMessage)
