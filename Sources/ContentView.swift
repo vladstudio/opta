@@ -404,6 +404,14 @@ struct ContentView: View {
         }
     }
 
+    private func captureDestinationURL(_ folder: String?) -> URL {
+        if let path = folder, !path.isEmpty {
+            return URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        }
+        return FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
+    }
+
     private func captureFolderButton(current: String?, onSelect: @escaping (String?) -> Void) -> some View {
         Button {
             let panel = NSOpenPanel()
@@ -411,9 +419,7 @@ struct ContentView: View {
             panel.canChooseDirectories = true
             panel.allowsMultipleSelection = false
             panel.prompt = "Save Here"
-            if let path = current, !path.isEmpty {
-                panel.directoryURL = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
-            }
+            panel.directoryURL = captureDestinationURL(current)
             if panel.runModal() == .OK, let url = panel.url {
                 onSelect(url.path)
             }
