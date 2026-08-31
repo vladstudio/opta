@@ -146,7 +146,7 @@ final class ToolResolver {
     }
 }
 
-final class ProcessRunner {
+final class ProcessRunner: @unchecked Sendable {
     private let lock = NSLock()
     private var cancelled = false
     private var currentProcesses: [Process] = []
@@ -162,7 +162,16 @@ final class ProcessRunner {
         cancelled = true
         let processes = currentProcesses
         lock.unlock()
-        for process in processes { process.terminate() }
+        for process in processes {
+            process.terminate()
+            // Safety net: a child that refuses to die on SIGTERM would leave
+            // the UI stuck in "processing" forever. Escalate after 5s.
+            // isRunning is false once reaped, so a reused pid is never hit.
+            DispatchQueue.global().asyncAfter(deadline: .now() + 5) { [weak process] in
+                guard let process, process.isRunning else { return }
+                kill(process.processIdentifier, SIGKILL)
+            }
+        }
     }
 
     func isCancelled() -> Bool {
@@ -186,42 +195,83 @@ final class ProcessRunner {
         process.standardInput = FileHandle.nullDevice
 
         return try await withCheckedThrowingContinuation { continuation in
-            process.terminationHandler = { [weak self] process in
+            // The stderr pipe must be drained while the child runs. Tools that
+            // log continuously (ffmpeg prints stats lines every few frames)
+            // fill the 64 KB pipe buffer and block in write() — from then on
+            // they cannot even exit on SIGTERM, because the exit path logs to
+            // stderr too, so Cancel appeared dead on long conversions. EOF
+            // arrives when the child exits, so the drain thread also owns
+            // completion: read to EOF, reap the child, resume exactly once.
+            let once = Once()
+            Thread.detachNewThread { [weak self] in
                 let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-                self?.lock.lock()
-                let wasCancelled = self?.cancelled ?? false
-                self?.currentProcesses.removeAll { $0 === process }
-                self?.lock.unlock()
-
-                guard !wasCancelled, process.terminationStatus == 0 else {
-                    if wasCancelled {
+                if process.isRunning { process.waitUntilExit() }
+                once.run {
+                    guard let self else {
                         continuation.resume(throwing: CancellationError())
                         return
                     }
-                    let tail = errData.count > 64_000 ? errData.suffix(64_000) : errData
-                    let errString = String(data: tail, encoding: .utf8)?
-                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    let message = errString.isEmpty ? "exit \(process.terminationStatus)" : String(errString.suffix(500))
-                    continuation.resume(throwing: OptaError.toolFailed(executable, message))
-                    return
+                    self.lock.lock()
+                    let wasCancelled = self.cancelled
+                    self.currentProcesses.removeAll { $0 === process }
+                    self.lock.unlock()
+                    guard !wasCancelled, process.terminationStatus == 0 else {
+                        if wasCancelled {
+                            continuation.resume(throwing: CancellationError())
+                            return
+                        }
+                        let tail = errData.count > 64_000 ? errData.suffix(64_000) : errData
+                        let errString = String(data: tail, encoding: .utf8)?
+                            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                        let message = errString.isEmpty ? "exit \(process.terminationStatus)" : String(errString.suffix(500))
+                        continuation.resume(throwing: OptaError.toolFailed(executable, message))
+                        return
+                    }
+
+                    continuation.resume()
                 }
-
-                continuation.resume()
             }
-
-            self.lock.lock()
-            self.currentProcesses.append(process)
-            self.lock.unlock()
 
             do {
                 try process.run()
             } catch {
-                self.lock.lock()
-                self.currentProcesses.removeAll { $0 === process }
-                self.lock.unlock()
-                continuation.resume(throwing: error)
+                once.run {
+                    self.lock.lock()
+                    self.currentProcesses.removeAll { $0 === process }
+                    self.lock.unlock()
+                    continuation.resume(throwing: error)
+                }
+                errPipe.fileHandleForWriting.closeFile() // unblock the drain thread
+                return
+            }
+
+            // Register only after a successful launch: terminate() on a
+            // never-launched Process raises an ObjC exception. If cancel
+            // already fired in that window, terminate the orphan ourselves.
+            lock.lock()
+            let alreadyCancelled = self.cancelled
+            if !alreadyCancelled {
+                currentProcesses.append(process)
+            }
+            lock.unlock()
+            if alreadyCancelled {
+                process.terminate()
             }
         }
+    }
+}
+
+/// Runs its body exactly once, on whichever thread arrives second.
+private final class Once: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+
+    func run(_ body: () -> Void) {
+        lock.lock()
+        let first = !done
+        done = true
+        lock.unlock()
+        if first { body() }
     }
 }
 
