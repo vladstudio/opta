@@ -9,7 +9,7 @@ A simple macOS app to optimize images, video, and audio.
 ## Features
 
 ### Images
-- Drag & drop or select image files (PNG, JPEG, TIFF, GIF, BMP, HEIC, WebP)
+- Drag & drop or select image files (PNG, JPEG, TIFF, GIF, BMP, HEIC, WebP, SVG)
 - Capture a screenshot of a display or window
 - Output as optimized PNG, JPG, or WebP
 - Reduce colors: All, 256, 128, 64, 32, 16, 4, 2
@@ -65,7 +65,7 @@ open -a Opta
 ## How it works
 
 ### Images
-1. **Input conversion** (non-PNG only) — `sips` (built into macOS) converts to PNG
+1. **Input conversion** (non-PNG only) — `sips` (built into macOS) converts to PNG; SVG is rasterized natively via NSImage at its intrinsic size
 2. **Color reduction** (if not "All") — [pngquant](https://pngquant.org/)
 3. **PNG optimization** — [oxipng](https://github.com/shssoichern/oxipng) (lossless, level 6)
 4. **JPG conversion** — ImageIO (built into macOS, configurable quality)

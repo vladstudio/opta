@@ -8,6 +8,7 @@ struct Settings: Codable {
     var imageStripMetadata = true
     var imageColorIndex = 0.0
     var imageQuality = 80.0
+    var imageSVGScale = 1
     var videoFormat: VideoOutputFormat = .mp4H264
     var videoSuffix = ""
     var videoStripMetadata = true
@@ -24,7 +25,7 @@ struct Settings: Codable {
     var recordingFolder: String?
 
     // Bump the suffix on any schema-breaking change; prior values reset to defaults.
-    private static let storageKey = "WorkspaceSettings.v3"
+    private static let storageKey = "WorkspaceSettings.v4"
 
     static func load() -> Settings {
         guard
@@ -250,7 +251,8 @@ final class WorkspaceModel: ObservableObject {
                     stripMetadata: settings.imageStripMetadata,
                     colorIndex: Int(settings.imageColorIndex),
                     quality: Int(settings.imageQuality),
-                    oxipngLevel: 6
+                    oxipngLevel: 6,
+                    svgScale: settings.imageSVGScale
                 )),
                 files
             )

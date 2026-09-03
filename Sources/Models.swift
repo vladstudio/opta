@@ -12,8 +12,8 @@ enum MediaTab: String, CaseIterable, Codable {
 
 // MARK: - Image Types (existing)
 
-let acceptedImageTypes: [UTType] = [.png, .jpeg, .tiff, .gif, .bmp, .heic, .webP]
-let acceptedImageExtensions: Set<String> = ["png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp", "heic", "heif", "webp"]
+let acceptedImageTypes: [UTType] = [.png, .jpeg, .tiff, .gif, .bmp, .heic, .webP, .svg]
+let acceptedImageExtensions: Set<String> = ["png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp", "heic", "heif", "webp", "svg"]
 
 enum ImageOutputFormat: String, CaseIterable, Codable {
     case png = "PNG"
@@ -200,6 +200,10 @@ class FileItem: Identifiable, ObservableObject {
 
     var isVideoSource: Bool {
         acceptedVideoExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    var isSVG: Bool {
+        url.pathExtension.lowercased() == "svg"
     }
 
     init(url: URL) {

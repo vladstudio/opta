@@ -225,6 +225,15 @@ struct ContentView: View {
                 TextField("suffix", text: $model.settings.imageSuffix)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
+                if model.queues.images.contains(where: { $0.isSVG }) {
+                    Picker("Scale", selection: $model.settings.imageSVGScale) {
+                        ForEach([1, 2, 3, 4], id: \.self) { Text("\($0)x") }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    .help("SVG raster size multiplier")
+                }
             }
 
             Toggle("Strip metadata", isOn: $model.settings.imageStripMetadata)

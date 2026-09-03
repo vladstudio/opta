@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import ImageIO
 import UserNotifications
@@ -23,6 +24,7 @@ struct ImageJob {
     let colorIndex: Int
     let quality: Int
     let oxipngLevel: Int
+    let svgScale: Int
 
     var requiredTools: [String] {
         var tools: [String] = []
@@ -401,13 +403,18 @@ final class ProcessingEngine: ObservableObject {
         defer { try? FileManager.default.removeItem(at: tmp) }
 
         var current = url.path(percentEncoded: false)
-        let isPNG = url.pathExtension.lowercased() == "png"
-        let sipsOutput = isPNG ? nil : FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
-        if let sipsOutput {
-            try await runner.run(executable: "/usr/bin/sips", arguments: ["-s", "format", "png", current, "--out", sipsOutput.path(percentEncoded: false)])
-            current = sipsOutput.path(percentEncoded: false)
+        let ext = url.pathExtension.lowercased()
+        let isPNG = ext == "png"
+        let rasterOutput = isPNG ? nil : FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
+        if let rasterOutput {
+            if ext == "svg" {
+                try await Self.rasterizeSVG(at: url, scale: job.svgScale, to: rasterOutput)
+            } else {
+                try await runner.run(executable: "/usr/bin/sips", arguments: ["-s", "format", "png", current, "--out", rasterOutput.path(percentEncoded: false)])
+            }
+            current = rasterOutput.path(percentEncoded: false)
         }
-        defer { if let sipsOutput { try? FileManager.default.removeItem(at: sipsOutput) } }
+        defer { if let rasterOutput { try? FileManager.default.removeItem(at: rasterOutput) } }
 
         if colors > 0 {
             try await runner.run(
@@ -492,6 +499,40 @@ final class ProcessingEngine: ObservableObject {
             throw OptaError.toolNotFound(name)
         }
         return path
+    }
+
+    /// Rasterizes an SVG with NSImage (vector-backed, crisp at any size)
+    /// at its intrinsic dimensions, optionally multiplied by `scale`.
+    nonisolated private static func rasterizeSVG(at url: URL, scale: Int, to output: URL) async throws {
+        guard let image = NSImage(contentsOfFile: url.path(percentEncoded: false)) else {
+            throw OptaError.toolFailed("svg", "Failed to load SVG")
+        }
+        let intrinsic = image.size
+        guard intrinsic.width > 0, intrinsic.height > 0 else {
+            throw OptaError.toolFailed("svg", "SVG has no intrinsic size")
+        }
+        let factor = CGFloat(max(1, scale))
+        let width = max(1, Int((intrinsic.width * factor).rounded()))
+        let height = max(1, Int((intrinsic.height * factor).rounded()))
+
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else {
+            throw OptaError.toolFailed("svg", "Failed to create bitmap")
+        }
+        rep.size = NSSize(width: width, height: height)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(in: NSRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
+        NSGraphicsContext.restoreGraphicsState()
+
+        guard let png = rep.representation(using: .png, properties: [:]) else {
+            throw OptaError.toolFailed("svg", "Failed to encode PNG")
+        }
+        try png.write(to: output)
     }
 
     private func writeJPEG(from inputPath: String, to outputPath: String, quality: Int, stripMetadata: Bool) throws {
