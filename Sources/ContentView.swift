@@ -29,7 +29,7 @@ struct ContentView: View {
                 controls
             }
         }
-        .frame(minWidth: 480, maxWidth: 480, minHeight: 450)
+        .frame(minWidth: 528, maxWidth: 528, minHeight: 450)
         .onAppear {
             model.dependenciesModel.refresh()
             if !model.dependenciesModel.allInstalled {
@@ -230,7 +230,7 @@ struct ContentView: View {
                         ForEach([1, 2, 3, 4], id: \.self) { Text("\($0)x") }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                     .fixedSize()
                     .help("SVG raster size multiplier")
                 }
