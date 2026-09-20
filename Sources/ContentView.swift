@@ -109,6 +109,7 @@ struct ContentView: View {
                         NSWorkspace.shared.activateFileViewerSelecting([file.url])
                     })
                     .contextMenu {
+                        let targets = model.targets(for: file)
                         Section("Original") {
                             Button("Optimize") {
                                 optimize(files: [file])
@@ -139,23 +140,20 @@ struct ContentView: View {
                         }
                         Section("Optimized") {
                             Button("Reveal in Finder") {
-                                revealOptimized(for: file)
+                                model.revealOptimized(targets)
                             }
                             .keyboardShortcut("f", modifiers: [.command, .shift])
-                            .disabled(!anyOptimizedExists(for: file))
+                            .disabled(!model.hasExistingOutput(targets))
                             Button("Copy to Clipboard") {
-                                copyOptimizedToClipboard(for: file)
+                                model.copyOptimized(targets)
                             }
                             .keyboardShortcut("c", modifiers: [.command, .shift])
-                            .disabled(!anyOptimizedExists(for: file))
+                            .disabled(!model.hasExistingOutput(targets))
                             Button("Move to Trash") {
-                                for f in optimizedTargets(for: file) where optimizedFileExists(f) {
-                                    try? FileManager.default.trashItem(at: f.outputURL!, resultingItemURL: nil)
-                                    f.outputURL = nil
-                                }
+                                model.trashOptimized(targets)
                             }
                             .keyboardShortcut(.delete, modifiers: [.command, .shift])
-                            .disabled(engine.isProcessing || !anyOptimizedExists(for: file))
+                            .disabled(engine.isProcessing || !model.hasExistingOutput(targets))
                         }
                     }
             }
@@ -324,39 +322,6 @@ struct ContentView: View {
             optimizeButton(disabled: model.queues.video.isEmpty)
         }
         .padding()
-    }
-
-    private func optimizedFileExists(_ file: FileItem) -> Bool {
-        guard let out = file.outputURL else { return false }
-        return FileManager.default.fileExists(atPath: out.path)
-    }
-
-    private func optimizedTargets(for file: FileItem) -> [FileItem] {
-        if model.selection.contains(file.id) && !model.selection.isEmpty {
-            return model.currentFiles.filter { model.selection.contains($0.id) }
-        }
-        return [file]
-    }
-
-    private func anyOptimizedExists(for file: FileItem) -> Bool {
-        optimizedTargets(for: file).contains { optimizedFileExists($0) }
-    }
-
-    private func revealOptimized(for file: FileItem) {
-        let urls = optimizedTargets(for: file).compactMap { $0.outputURL }
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
-        if !urls.isEmpty {
-            NSWorkspace.shared.activateFileViewerSelecting(urls)
-        }
-    }
-
-    private func copyOptimizedToClipboard(for file: FileItem) {
-        let urls = optimizedTargets(for: file).compactMap { $0.outputURL }
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
-        guard !urls.isEmpty else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.writeObjects(urls as [NSPasteboardWriting])
     }
 
     private func crfHint(_ crf: Int) -> String {

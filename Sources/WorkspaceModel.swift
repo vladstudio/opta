@@ -92,42 +92,58 @@ final class WorkspaceModel: ObservableObject {
             guard !isProcessing, !selection.isEmpty else { return }
             trashSelected()
         case .revealOptimized:
-            revealOptimized()
+            revealOptimized(commandTargets)
         case .copyOptimized:
-            copyOptimized()
+            copyOptimized(commandTargets)
         case .trashOptimized:
-            trashOptimized()
+            trashOptimized(commandTargets)
         case .openDependencies:
             dependenciesModel.refresh()
             showDependenciesSheet = true
         }
     }
 
-    private var optimizedTargets: [FileItem] {
-        selection.isEmpty ? currentFiles : currentFiles.filter { selection.contains($0.id) }
+    private var selectedFiles: [FileItem] {
+        currentFiles.filter { selection.contains($0.id) }
     }
 
-    func revealOptimized() {
-        let urls = optimizedTargets.compactMap { $0.outputURL }
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
+    // Per-file actions target the selection if it contains the file, else just the file;
+    // command-based actions target the selection, or all files when nothing is selected.
+    func targets(for file: FileItem) -> [FileItem] {
+        selection.contains(file.id) ? selectedFiles : [file]
+    }
+
+    private var commandTargets: [FileItem] {
+        selection.isEmpty ? currentFiles : selectedFiles
+    }
+
+    private func existingOutputs(_ files: [FileItem]) -> [URL] {
+        files.compactMap(\.outputURL).filter { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    func hasExistingOutput(_ files: [FileItem]) -> Bool {
+        !existingOutputs(files).isEmpty
+    }
+
+    func revealOptimized(_ files: [FileItem]) {
+        let urls = existingOutputs(files)
         if !urls.isEmpty {
             NSWorkspace.shared.activateFileViewerSelecting(urls)
         }
     }
 
-    func copyOptimized() {
-        let urls = optimizedTargets.compactMap { $0.outputURL }
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
+    func copyOptimized(_ files: [FileItem]) {
+        let urls = existingOutputs(files)
         guard !urls.isEmpty else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects(urls as [NSPasteboardWriting])
     }
 
-    func trashOptimized() {
-        for f in optimizedTargets where f.outputURL != nil
-            && FileManager.default.fileExists(atPath: f.outputURL!.path) {
-            try? FileManager.default.trashItem(at: f.outputURL!, resultingItemURL: nil)
+    func trashOptimized(_ files: [FileItem]) {
+        for f in files {
+            guard let out = f.outputURL, FileManager.default.fileExists(atPath: out.path) else { continue }
+            try? FileManager.default.trashItem(at: out, resultingItemURL: nil)
             f.outputURL = nil
         }
     }
@@ -180,7 +196,6 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func trashSelected() {
-        let selectedFiles = currentFiles.filter { selection.contains($0.id) }
         var failedFiles: [String] = []
         var trashedIDs = Set<FileItem.ID>()
         for file in selectedFiles {
@@ -203,7 +218,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func previewURLs() -> [URL] {
-        currentFiles.filter { selection.contains($0.id) }.map(\.url)
+        selectedFiles.map(\.url)
     }
 
     func addFile(_ url: URL, preferredTab: FileDestination, probeAudioTracks: (FileItem) -> Void) -> FileItem? {
