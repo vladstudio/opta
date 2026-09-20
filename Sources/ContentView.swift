@@ -205,10 +205,23 @@ struct ContentView: View {
         }
     }
 
+    private var addCleanButtons: some View {
+        HStack(spacing: 8) {
+            Button("+") { addFiles() }
+            Button {
+                model.removeAll(from: model.settings.selectedTab, isProcessing: engine.isProcessing)
+            } label: {
+                Image(systemName: "eraser")
+            }
+            .help("Remove all files from the list")
+            .disabled(engine.isProcessing || model.currentFiles.isEmpty)
+        }
+    }
+
     private var imageControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Button("+") { addFiles() }
+                addCleanButtons
                 Button("Screenshot...") { takeScreenshot() }
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(screenshotter.isCapturing || recorder.isActive)
@@ -258,7 +271,7 @@ struct ContentView: View {
     private var videoControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Button("+") { addFiles() }
+                addCleanButtons
                 Button(recorder.isRecording ? "Stop Recording" : "Record Screen...") { recordScreen() }
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(screenshotter.isCapturing)
@@ -371,7 +384,7 @@ struct ContentView: View {
     private var audioControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Button("+") { addFiles() }
+                addCleanButtons
                 Spacer()
                 Picker("Format", selection: $model.settings.audioFormat) {
                     ForEach(AudioOutputFormat.allCases, id: \.self) { Text($0.rawValue) }

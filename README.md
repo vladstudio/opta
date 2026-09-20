@@ -34,6 +34,7 @@ A simple macOS app to optimize images, video, and audio.
 - Strip metadata
 
 ### File Management
+- Clean button removes all files from the list
 - Before/after size comparison
 - Remove from list (⌫), Move to Trash (⌘⌫), Reveal in Finder
 - Quick Look preview (Space)

@@ -161,6 +161,14 @@ final class WorkspaceModel: ObservableObject {
         selection.removeAll()
     }
 
+    func removeAll(from tab: MediaTab, isProcessing: Bool) {
+        guard !isProcessing else { return }
+        updateFiles(for: tab) { files in
+            files.removeAll()
+        }
+        selection.removeAll()
+    }
+
     func trashFile(_ file: FileItem, from tab: MediaTab, isProcessing: Bool) {
         guard !isProcessing else { return }
         do {
