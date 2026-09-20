@@ -96,7 +96,8 @@ final class WorkspaceModel: ObservableObject {
         case .copyOptimized:
             copyOptimized(commandTargets)
         case .trashOptimized:
-            trashOptimized(commandTargets)
+            guard !isProcessing, !selection.isEmpty else { return }
+            trashOptimized(selectedFiles)
         case .openDependencies:
             dependenciesModel.refresh()
             showDependenciesSheet = true
@@ -143,7 +144,7 @@ final class WorkspaceModel: ObservableObject {
     func trashOptimized(_ files: [FileItem]) {
         for f in files {
             guard let out = f.outputURL, FileManager.default.fileExists(atPath: out.path) else { continue }
-            try? FileManager.default.trashItem(at: out, resultingItemURL: nil)
+            guard (try? FileManager.default.trashItem(at: out, resultingItemURL: nil)) != nil else { continue }
             f.outputURL = nil
         }
     }
