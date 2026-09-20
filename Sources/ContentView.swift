@@ -184,11 +184,11 @@ struct ContentView: View {
     private var emptyStateHint: String {
         switch model.settings.selectedTab {
         case .images:
-            "Drop image files here"
+            "Drop images or folders here"
         case .video:
-            "Drop video files here"
+            "Drop videos or folders here"
         case .audio:
-            "Drop audio/video files here"
+            "Drop audio, video, or folders here"
         }
     }
 
@@ -441,6 +441,7 @@ struct ContentView: View {
     private func addFiles() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = true
 
         switch model.settings.selectedTab {
         case .images:

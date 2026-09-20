@@ -216,11 +216,47 @@ final class WorkspaceModel: ObservableObject {
     func addAndSelect(_ urls: [URL], preferredTab: FileDestination, probeAudioTracks: (FileItem) -> Void) {
         var ids: Set<FileItem.ID> = []
         for url in urls {
-            if let item = addFile(url, preferredTab: preferredTab, probeAudioTracks: probeAudioTracks) {
-                ids.insert(item.id)
+            let isFolder = Self.isMediaFolder(url)
+            let fileURLs = isFolder ? Self.supportedFiles(in: url) : [url]
+            for fileURL in fileURLs {
+                // Folder contents classify into their natural tabs; dropped files respect the current tab.
+                if let item = addFile(fileURL, preferredTab: isFolder ? .auto : preferredTab, probeAudioTracks: probeAudioTracks) {
+                    ids.insert(item.id)
+                }
             }
         }
-        if !ids.isEmpty { selection = ids }
+        // Union (not replace) so files added earlier stay selected: add X, then Y → Optimize processes both.
+        if !ids.isEmpty { selection.formUnion(ids) }
+    }
+
+    private static func isMediaFolder(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+        return values?.isDirectory == true && values?.isPackage != true
+    }
+
+    // Recursively collects supported files from a folder, in Finder-like order.
+    private static func supportedFiles(in folder: URL) -> [URL] {
+        var files: [URL] = []
+        var visited = Set<String>()
+
+        func walk(_ directory: URL) {
+            guard visited.insert(directory.resolvingSymlinksInPath().path(percentEncoded: false)).inserted else { return }
+            let children = (try? FileManager.default.contentsOfDirectory(
+                at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+            )) ?? []
+            for child in children.sorted(by: {
+                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+            }) {
+                if isMediaFolder(child) {
+                    walk(child)
+                } else if classifyFile(child) != nil {
+                    files.append(child)
+                }
+            }
+        }
+
+        walk(folder)
+        return files
     }
 
     func destinationForCurrentTab() -> FileDestination {
@@ -228,10 +264,12 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func handleDroppedURLs(_ urls: [URL], destination: FileDestination, probeAudioTracks: (FileItem) -> Void) {
-        if let firstTab = urls.compactMap({ destinationTab(for: $0.standardizedFileURL, destination: destination) }).first {
-            settings.selectedTab = firstTab
-        }
+        let before = queues
         addAndSelect(urls, preferredTab: destination, probeAudioTracks: probeAudioTracks)
+        // Focus the first tab that received new files (a folder can populate several tabs).
+        if let tab = MediaTab.allCases.first(where: { queues[$0].count > before[$0].count }) {
+            settings.selectedTab = tab
+        }
     }
 
     func optimizationRequest() -> (job: ProcessingJob, files: [FileItem])? {

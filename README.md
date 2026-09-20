@@ -40,6 +40,7 @@ A simple macOS app to optimize images, video, and audio.
 - Tab labels show a • indicator when there are unprocessed files
 
 ### General
+- Drop or select folders — all supported files inside are added recursively
 - Keyboard shortcuts: ⌘1/2/3 for tab switching, ⌘⌫ trash, ⌫ remove, Space preview, ↵ optimize
 - Settings persist across launches
 - macOS notification when batch completes
