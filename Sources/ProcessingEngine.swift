@@ -664,7 +664,7 @@ final class ProcessingEngine: ObservableObject {
         guard dimension != .original else {
             return []
         }
-        return ["scale=-2:\(dimension.rawValue)"]
+        return ["scale=-2:\(dimension.rawValue):flags=lanczos+accurate_rnd+full_chroma_int"]
     }
 
     private func h264Arguments(input: String, filters: [String], stripMetadata: Bool, crf: Int, audioBitrate: Int, output: String) -> [String] {
