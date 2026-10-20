@@ -25,6 +25,7 @@ struct ImageJob {
     let quality: Int
     let oxipngLevel: Int
     let svgScale: Int
+    let dimension: DimensionPreset
 
     var requiredTools: [String] {
         var tools: [String] = []
@@ -401,6 +402,8 @@ final class ProcessingEngine: ObservableObject {
         let colors = colorSteps.indices.contains(job.colorIndex) ? colorSteps[job.colorIndex] : 0
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
         defer { try? FileManager.default.removeItem(at: tmp) }
+        let resized = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
+        defer { try? FileManager.default.removeItem(at: resized) }
 
         var current = url.path(percentEncoded: false)
         let ext = url.pathExtension.lowercased()
@@ -415,6 +418,12 @@ final class ProcessingEngine: ObservableObject {
             current = rasterOutput.path(percentEncoded: false)
         }
         defer { if let rasterOutput { try? FileManager.default.removeItem(at: rasterOutput) } }
+
+        if job.dimension != .original, ext != "svg", let (width, height) = Self.pixelSize(of: current), min(width, height) > job.dimension.rawValue {
+            let side = width >= height ? "--resampleHeight" : "--resampleWidth"
+            try await runner.run(executable: "/usr/bin/sips", arguments: [side, "\(job.dimension.rawValue)", current, "--out", resized.path(percentEncoded: false)])
+            current = resized.path(percentEncoded: false)
+        }
 
         if colors > 0 {
             try await runner.run(
@@ -533,6 +542,14 @@ final class ProcessingEngine: ObservableObject {
             throw OptaError.toolFailed("svg", "Failed to encode PNG")
         }
         try png.write(to: output)
+    }
+
+    nonisolated private static func pixelSize(of path: String) -> (Int, Int)? {
+        guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int else { return nil }
+        return (width, height)
     }
 
     private func writeJPEG(from inputPath: String, to outputPath: String, quality: Int, stripMetadata: Bool) throws {
@@ -664,7 +681,7 @@ final class ProcessingEngine: ObservableObject {
         guard dimension != .original else {
             return []
         }
-        return ["scale=-2:\(dimension.rawValue):flags=lanczos+accurate_rnd+full_chroma_int"]
+        return ["scale=w='trunc(iw*min(1,\(dimension.rawValue)/min(iw,ih))/2)*2':h=-2:flags=lanczos+accurate_rnd+full_chroma_int"]
     }
 
     private func h264Arguments(input: String, filters: [String], stripMetadata: Bool, crf: Int, audioBitrate: Int, output: String) -> [String] {

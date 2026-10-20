@@ -249,6 +249,9 @@ struct ContentView: View {
 
             Toggle("Strip metadata", isOn: $model.settings.imageStripMetadata)
 
+            dimensionPicker($model.settings.imageDimension)
+                .disabled(!model.queues.images.isEmpty && model.queues.images.allSatisfy(\.isSVG))
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("Colors: \(colorLabel(Int(model.settings.imageColorIndex)))")
                 Slider(value: $model.settings.imageColorIndex, in: 0...Double(colorSteps.count - 1), step: 1)
@@ -289,15 +292,7 @@ struct ContentView: View {
 
             Toggle("Strip metadata", isOn: $model.settings.videoStripMetadata)
 
-            HStack {
-                Text("Dimensions:")
-                Picker("Dimensions", selection: $model.settings.videoDimension) {
-                    ForEach(DimensionPreset.allCases, id: \.self) { Text($0.label) }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .fixedSize()
-            }
+            dimensionPicker($model.settings.videoDimension)
 
             if model.settings.videoFormat.hasCRF {
                 VStack(alignment: .leading, spacing: 4) {
@@ -379,6 +374,18 @@ struct ContentView: View {
             optimizeButton(disabled: model.queues.audio.isEmpty)
         }
         .padding()
+    }
+
+    private func dimensionPicker(_ selection: Binding<DimensionPreset>) -> some View {
+        HStack {
+            Text("Dimensions:")
+            Picker("Dimensions", selection: selection) {
+                ForEach(DimensionPreset.allCases, id: \.self) { Text($0.label) }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .fixedSize()
+        }
     }
 
     private func optimizeButton(disabled: Bool) -> some View {

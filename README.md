@@ -13,6 +13,7 @@ A simple macOS app to optimize images, video, and audio.
 - Capture a screenshot of a display or window
 - Output as optimized PNG, JPG, or WebP
 - Reduce colors: All, 256, 128, 64, 32, 16, 4, 2
+- Resize presets (Original, 1080p, 720p, 480p, 360p) set the short side and never upscale
 - Configurable quality (JPG, WebP)
 - Custom output filename suffix
 - Strip metadata
@@ -21,7 +22,7 @@ A simple macOS app to optimize images, video, and audio.
 - Drag & drop or select video files (MP4, MOV, AVI, MKV, WebM, M4V, FLV, WMV, TS, MTS)
 - Record your screen or a window
 - Output as MP4 (H.264), MP4 (H.265), WebM (VP9), MOV, or GIF
-- Configurable CRF quality with hints (visually lossless → smaller file) and dimension presets (Original, 1080p, 720p, 480p, 360p)
+- Configurable CRF quality with hints (visually lossless → smaller file) and dimension presets (Original, 1080p, 720p, 480p, 360p; set the short side, never upscale)
 - Custom output filename suffix
 - Strip metadata
 
